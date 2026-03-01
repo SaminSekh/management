@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Management — Login</title>
+    <meta name="description" content="Multi-tenant office management and social hub login portal." />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 40%, #24243e 100%);
+            min-height: 100vh;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.35;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            width: 500px;
+            height: 500px;
+            background: #6c63ff;
+            top: -150px;
+            left: -150px;
+        }
+
+        .orb-2 {
+            width: 400px;
+            height: 400px;
+            background: #2dd4bf;
+            bottom: -100px;
+            right: -100px;
+            animation-delay: -4s;
+        }
+
+        .orb-3 {
+            width: 300px;
+            height: 300px;
+            background: #f472b6;
+            top: 40%;
+            left: 30%;
+            animation-delay: -2s;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0) scale(1);
+            }
+
+            50% {
+                transform: translateY(-30px) scale(1.05);
+            }
+        }
+
+        .input-field {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #fff;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .input-field::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #6c63ff;
+            box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.25);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6c63ff, #4f46e5);
+            transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+            box-shadow: 0 4px 20px rgba(108, 99, 255, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 30px rgba(108, 99, 255, 0.5);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .logo-ring {
+            background: linear-gradient(135deg, #6c63ff, #2dd4bf);
+            padding: 3px;
+            border-radius: 50%;
+            animation: spin-slow 12s linear infinite;
+        }
+
+        @keyframes spin-slow {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease both;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #error-msg {
+            border-left: 3px solid #f87171;
+        }
+    </style>
+</head>
+
+<body class="gradient-bg flex items-center justify-center p-4 overflow-hidden relative">
+
+    <!-- Ambient orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <!-- Login Card -->
+    <div class="glass rounded-3xl p-8 sm:p-10 w-full max-w-md relative z-10 fade-in shadow-2xl">
+
+        <!-- Logo -->
+        <div class="flex flex-col items-center mb-8">
+            <div class="logo-ring mb-4">
+                <div class="bg-[#0f0c29] rounded-full w-16 h-16 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                </div>
+            </div>
+            <h1 class="text-3xl font-bold text-white tracking-tight">Office Hub</h1>
+            <p class="text-white/50 text-sm mt-1">Multi-Tenant Workspace Management</p>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error-msg" class="hidden bg-red-500/10 text-red-300 text-sm px-4 py-3 rounded-xl mb-5"></div>
+
+        <!-- Form -->
+        <form id="login-form" class="space-y-5">
+            <div>
+                <label class="block text-white/70 text-sm font-medium mb-2">Username</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-3 flex items-center text-white/40">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                    </span>
+                    <input id="username" type="text" placeholder="your_username"
+                        class="input-field w-full rounded-xl pl-10 pr-4 py-3 text-sm" required />
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-white/70 text-sm font-medium mb-2">Password</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-3 flex items-center text-white/40">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                    </span>
+                    <input id="password" type="password" placeholder="••••••••"
+                        class="input-field w-full rounded-xl pl-10 pr-12 py-3 text-sm" required />
+                    <button type="button" id="toggle-pw"
+                        class="absolute inset-y-0 right-3 flex items-center text-white/40 hover:text-white/70 transition-colors">
+                        <svg id="eye-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <button id="login-btn" type="submit"
+                class="btn-primary w-full py-3 rounded-xl text-white font-semibold text-sm tracking-wide flex items-center justify-center gap-2">
+                <span id="btn-text">Sign In</span>
+                <svg id="btn-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+            </button>
+
+            <div class="flex items-center gap-3 my-6">
+                <div class="h-[1px] flex-1 bg-white/10"></div>
+                <span class="text-white/30 text-[10px] uppercase font-bold tracking-widest">Or login with</span>
+                <div class="h-[1px] flex-1 bg-white/10"></div>
+            </div>
+
+            <button type="button" onclick="alert('Google login integration coming soon!')"
+                class="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-white font-medium text-sm flex items-center justify-center gap-3 hover:bg-white/10 transition-all">
+                <img src="google.jpg" class="w-5 h-5 object-contain" alt="Google" />
+                <span>Continue with Google</span>
+            </button>
+        </form>
+
+        <p class="text-center text-white/30 text-xs mt-6">
+            © 2026 Office Hub · All rights reserved
+        </p>
+    </div>
+
+    <script src="supabase-config.js"></script>
+    <script>
+        // Toggle password visibility
+        document.getElementById('toggle-pw').addEventListener('click', () => {
+            const pw = document.getElementById('password');
+            pw.type = pw.type === 'password' ? 'text' : 'password';
+        });
+
+        // Login form (Username based)
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const errEl = document.getElementById('error-msg');
+            const spinner = document.getElementById('btn-spinner');
+            const btnText = document.getElementById('btn-text');
+
+            errEl.classList.add('hidden');
+            spinner.classList.remove('hidden');
+            btnText.textContent = 'Verifying…';
+
+            const { data: profile, error } = await sb
+                .from('profiles')
+                .select('*')
+                .eq('username', username)
+                .eq('password', password)
+                .single();
+
+            if (error || !profile) {
+                errEl.textContent = 'Invalid username or password.';
+                errEl.classList.remove('hidden');
+                spinner.classList.add('hidden');
+                btnText.textContent = 'Sign In';
+                return;
+            }
+
+            if (String(profile.is_suspended) === 'true') {
+                errEl.textContent = 'Your account has been suspended or paused. Contact admin.';
+                errEl.classList.remove('hidden');
+                spinner.classList.add('hidden');
+                btnText.textContent = 'Sign In';
+                return;
+            }
+
+            // Single Device Login: Generate unique session ID
+            const sid = Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+            // Update session_id in DB
+            const { error: sErr } = await sb.from('profiles').update({ session_id: sid }).eq('id', profile.id);
+            if (sErr) {
+                console.error('Session update failed:', sErr);
+                // We proceed anyway but single-device check might fail for this login if column doesn't exist
+            }
+
+            profile.session_id = sid; // Attach to local object
+
+            // Save user to localStorage
+            localStorage.setItem('office_hub_user', JSON.stringify(profile));
+
+            const role = profile.role || 'staff';
+            if (role === 'super_admin') window.location.href = 'superadmin.html';
+            else if (role === 'admin') window.location.href = 'admin.html';
+            else window.location.href = 'staff.html';
+        });
+
+        // Auto-redirect if already logged in via localStorage
+        (async () => {
+            const userStr = localStorage.getItem('office_hub_user');
+            if (userStr) {
+                const user = JSON.parse(userStr);
+                const role = user.role || 'staff';
+                if (role === 'super_admin') window.location.href = 'superadmin.html';
+                else if (role === 'admin') window.location.href = 'admin.html';
+                else window.location.href = 'staff.html';
+            }
+        })();
+    </script>
+</body>
+
+</html>

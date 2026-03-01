@@ -1,0 +1,2553 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Management — Super Admin</title>
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        :root {
+            --primary: #f59e0b;
+            --accent: #fbbf24;
+            --bg: #0d0d1a;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0d0d1a;
+            color: #e2e8f0;
+            margin: 0
+        }
+
+        #sidebar {
+            width: 260px;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #12122a 0%, #0d0d1a 100%);
+            border-right: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            z-index: 40;
+            transition: transform 0.3s
+        }
+
+        #main {
+            margin-left: 260px;
+            min-height: 100vh;
+            transition: margin-left 0.3s;
+            position: relative;
+            z-index: 10;
+        }
+
+        @media(max-width:768px) {
+            #sidebar {
+                transform: translateX(-260px)
+            }
+
+            #sidebar.open {
+                transform: translateX(0)
+            }
+
+            #main {
+                margin-left: 0
+            }
+
+            #overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.6);
+                z-index: 35;
+                display: none
+            }
+
+            #overlay.show {
+                display: block
+            }
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 20px;
+            border-radius: 12px;
+            margin: 2px 10px;
+            color: rgba(255, 255, 255, 0.55);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none
+        }
+
+        .nav-item:hover {
+            background: rgba(251, 191, 36, 0.1);
+            color: #fff
+        }
+
+        .nav-item.active {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.1));
+            color: #fbbf24
+        }
+
+        .nav-item svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 20px;
+            padding: 24px
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 18px;
+            padding: 20px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        }
+
+        .section {
+            display: none
+        }
+
+        .section.active {
+            display: block
+        }
+
+        /* Photo Actions */
+        .clock-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px 28px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            gap: 8px;
+        }
+
+        .btn-in {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
+        }
+
+        .btn-in:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(16, 185, 129, 0.45);
+        }
+
+        .btn-brk {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.35);
+        }
+
+        .btn-brk:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(245, 158, 11, 0.45);
+        }
+
+        .btn-out {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.35);
+        }
+
+        .btn-out:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(239, 68, 68, 0.45);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 22px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(rgba(255, 255, 255, 0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .btn:hover::after {
+            opacity: 1;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.35);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.2);
+            backdrop-filter: blur(4px);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #ef4444;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.03);
+            color: rgba(255, 255, 255, 0.6);
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.07);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 11px;
+            border-radius: 10px;
+        }
+
+        .action-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            border: 1px solid transparent;
+            background: rgba(255, 255, 255, 0.03);
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .action-btn:hover {
+            transform: scale(1.1);
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .action-btn.edit:hover {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border-color: rgba(245, 158, 11, 0.2);
+        }
+
+        .action-btn.view:hover {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        .action-btn.delete:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 12px
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 4px
+        }
+
+        th {
+            text-align: left;
+            padding: 8px 14px;
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-weight: 600
+        }
+
+        td {
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, 0.03);
+            font-size: 13px;
+            vertical-align: middle
+        }
+
+        td:first-child {
+            border-radius: 10px 0 0 10px
+        }
+
+        td:last-child {
+            border-radius: 0 10px 10px 0
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.05)
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600
+        }
+
+        .badge-sa {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.3)
+        }
+
+        .badge-admin {
+            background: rgba(168, 85, 247, 0.15);
+            color: #c4b5fd;
+            border: 1px solid rgba(168, 85, 247, 0.3)
+        }
+
+        .badge-sa {
+            background: rgba(244, 63, 94, 0.15);
+            color: #fb7185;
+            border: 1px solid rgba(244, 63, 94, 0.3)
+        }
+
+        .badge-staff {
+            background: rgba(14, 165, 233, 0.15);
+            color: #7dd3fc;
+            border: 1px solid rgba(14, 165, 233, 0.3)
+        }
+
+        .input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-radius: 12px;
+            padding: 10px 16px;
+            font-size: 14px;
+            width: 100%;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Override Browser Autofill Styles */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 1000px #1a1a2e inset !important;
+            -webkit-text-fill-color: #fff !important;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: #f59e0b;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+        }
+
+        .input::placeholder {
+            color: rgba(255, 255, 255, 0.3)
+        }
+
+        .modal-bg {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 16px
+        }
+
+        .modal-bg.show {
+            display: flex
+        }
+
+        .modal {
+            background: #1a1a2e;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 28px;
+            width: 100%;
+            max-width: 420px
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #fff;
+            font-size: 13px;
+            flex-shrink: 0
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 16px;
+            padding: 20px
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease both
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        select.input option {
+            background: #1e1e3a
+        }
+
+        /* Theme Grid */
+        #theme-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            gap: 12px;
+        }
+
+        /* Interactive Background Blobs (Orbs) */
+        #theme-orbs {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.35;
+            animation: float 8s ease-in-out infinite;
+            transition: background 0.8s ease;
+        }
+
+        .orb-1 {
+            width: 500px;
+            height: 500px;
+            top: -150px;
+            left: -150px;
+        }
+
+        .orb-2 {
+            width: 400px;
+            height: 400px;
+            bottom: -100px;
+            right: -100px;
+            animation-delay: -4s;
+        }
+
+        .orb-3 {
+            width: 300px;
+            height: 300px;
+            top: 40%;
+            left: 30%;
+            animation-delay: -2s;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0) scale(1);
+            }
+
+            50% {
+                transform: translateY(-30px) scale(1.05);
+            }
+        }
+    </style>
+    <script>
+        // Immediate Theme Check for SA
+        (function () {
+            const user = JSON.parse(localStorage.getItem('office_hub_user') || '{}');
+            const themeId = user.theme_id || 'theme-1';
+            const colors = {
+                'theme-1': { primary: '#6c63ff', accent: '#2dd4bf', bg: '#0d0d1a' },
+                'theme-2': { primary: '#38bdf8', accent: '#818cf8', bg: '#020617' },
+                'theme-3': { primary: '#34d399', accent: '#059669', bg: '#064e3b' },
+                'theme-4': { primary: '#f87171', accent: '#b91d1d', bg: '#450a0a' },
+                'theme-5': { primary: '#0ea5e9', accent: '#2dd4bf', bg: '#0c4a6e' },
+                'theme-6': { primary: '#f43f5e', accent: '#fb923c', bg: '#500724' },
+                'theme-7': { primary: '#a855f7', accent: '#ec4899', bg: '#4c0519' },
+                'theme-8': { primary: '#00ffcc', accent: '#ff00ff', bg: '#1a1a2e' },
+                'theme-9': { primary: '#4ade80', accent: '#15803d', bg: '#052e16' },
+                'theme-10': { primary: '#94a3b8', accent: '#3b82f6', bg: '#0f172a' }
+            };
+            const c = colors[themeId] || colors['theme-1'];
+            document.documentElement.style.setProperty('--primary', c.primary);
+            document.documentElement.style.setProperty('--accent', c.accent);
+            document.documentElement.style.setProperty('--bg', c.bg);
+            document.write('<style id="early-theme">body{background:' + c.bg + '!important;}</style>');
+        })();
+    </script>
+</head>
+
+<body>
+    <!-- Global Theme Background Effects -->
+    <div id="theme-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+    <div id="overlay" onclick="closeSidebar()"></div>
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar">
+        <div class="px-4 py-4 border-b border-white/5">
+            <div class="flex items-center gap-3">
+                <div id="sb-avatar" class="avatar">SA</div>
+                <div>
+                    <div id="sb-name" class="text-white font-semibold text-sm">Loading…</div>
+                    <div class="text-amber-400 text-xs font-medium">Super Admin</div>
+                </div>
+            </div>
+        </div>
+        <nav class="flex-1 py-4 overflow-y-auto">
+            <div class="px-4 mb-2 text-white/25 text-xs font-semibold uppercase tracking-widest">System</div>
+            <div class="nav-item active" onclick="show('overview')" id="nav-overview"><svg fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>System Overview</div>
+            <div class="nav-item" onclick="show('companies')" id="nav-companies"><svg fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>Companies</div>
+            <div class="nav-item" onclick="show('users')" id="nav-users"><svg fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>All Users</div>
+            <div class="nav-item" onclick="show('subs')" id="nav-subs"><svg fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>Subscriptions</div>
+            <div class="nav-item" onclick="show('messages')" id="nav-messages"><svg fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>Company Messages</div>
+            <div class="nav-item" onclick="show('profile')" id="nav-profile">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>My Profile
+            </div>
+            <div class="nav-item" onclick="show('settings')" id="nav-settings">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>System Settings
+            </div>
+        </nav>
+        <div class="p-4 border-t border-white/5">
+            <button onclick="logout()" class="nav-item w-full text-red-400 hover:bg-red-500/10 hover:text-red-300"><svg
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>Sign Out</button>
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main id="main">
+        <div id="topbar"
+            class="sticky top-0 z-30 backdrop-blur border-b border-white/5 px-4 sm:px-6 py-3 flex items-center gap-4">
+            <button onclick="toggleSidebar()"
+                class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-all md:hidden">
+                <svg class="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            <h1 id="page-title" class="text-white font-semibold text-base sm:text-lg">System Overview</h1>
+            <span
+                class="ml-2 hidden sm:inline text-xs bg-amber-500/15 text-amber-300 border border-amber-500/25 px-3 py-1 rounded-full">Super
+                Admin</span>
+            <div class="ml-auto text-white/40 text-sm hidden sm:block" id="topbar-time"></div>
+        </div>
+
+        <div class="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+
+            <!-- ── OVERVIEW ── -->
+            <div id="section-overview" class="section active fade-in space-y-6">
+                <!-- Filter Bar -->
+                <div class="flex items-center justify-between flex-wrap gap-4">
+                    <h2 class="text-white font-semibold flex items-center gap-2">
+                        <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                        </svg>
+                        System Master Control
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <select id="ov-range" class="input py-1 text-xs w-auto bg-white/5 border-white/10"
+                            onchange="loadOverview()">
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="week" selected>This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
+                        <div id="ov-custom-dates" class="hidden flex items-center gap-2">
+                            <input type="date" id="ov-start" class="input py-1 text-xs w-28 bg-white/5 border-white/10"
+                                onchange="loadOverview()" />
+                            <span class="text-white/30 text-xs">-</span>
+                            <input type="date" id="ov-end" class="input py-1 text-xs w-28 bg-white/5 border-white/10"
+                                onchange="loadOverview()" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+                    <div class="stat-card">
+                        <div class="text-white/40 text-[10px] uppercase font-bold mb-1">Total Cos</div>
+                        <div id="st-cos" class="text-2xl font-bold text-amber-400">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="text-white/40 text-[10px] uppercase font-bold mb-1">Total Users</div>
+                        <div id="st-users" class="text-2xl font-bold text-white">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="text-white/40 text-[10px] uppercase font-bold mb-1">Posts</div>
+                        <div id="st-posts" class="text-2xl font-bold text-violet-400">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="text-white/40 text-[10px] uppercase font-bold mb-1">Due Cos</div>
+                        <div id="st-due" class="text-2xl font-bold text-red-500">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="text-white/40 text-[10px] uppercase font-bold mb-1">Paid Cos</div>
+                        <div id="st-paid" class="text-2xl font-bold text-emerald-400">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="text-white/40 text-[10px] uppercase font-bold mb-1">Not Set</div>
+                        <div id="st-notset" class="text-2xl font-bold text-white/40">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="text-white/40 text-[10px] uppercase font-bold mb-1">Earnings</div>
+                        <div id="st-earn" class="text-2xl font-bold text-emerald-400">—</div>
+                    </div>
+                </div>
+
+                <!-- Graph Section -->
+                <div class="card p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-white font-semibold">Activity & Revenue Trends</h3>
+                        <div class="flex items-center gap-3">
+                            <select id="ov-graph-metric" class="input py-1 text-xs w-auto bg-white/5 border-white/10"
+                                onchange="renderOverviewGraph()">
+                                <option value="earnings">Earnings ($)</option>
+                                <option value="users">New Users</option>
+                                <option value="posts">Global Posts</option>
+                                <option value="att">Check-ins</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="relative h-72 w-full">
+                        <canvas id="ovChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent Activity Table -->
+                <div class="card">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="font-semibold text-white">System-Wide Activity Log</div>
+                        <div class="flex items-center gap-2">
+                            <div id="act-bulk-bar"
+                                class="hidden flex items-center gap-2 bg-red-500/10 border border-red-500/20 px-3 py-1 rounded-lg">
+                                <span id="act-sel-count" class="text-red-400 text-xs font-bold">0</span>
+                                <button onclick="bulkDeleteActivity()"
+                                    class="text-red-400 text-xs font-bold hover:underline">Delete Selected</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr>
+                                    <th class="w-10"><input type="checkbox" id="act-check-all"
+                                            onclick="toggleActivityCheckboxes(this.checked)"></th>
+                                    <th>Staff</th>
+                                    <th>Action</th>
+                                    <th>Company</th>
+                                    <th>Date & Time</th>
+                                    <th class="text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-body">
+                                <tr>
+                                    <td colspan="6" class="text-center text-white/40 py-8">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <div
+                                                class="w-8 h-8 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin">
+                                            </div>
+                                            Loading activities...
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex justify-center mt-6">
+                        <button id="btn-load-more" onclick="loadActivity(true)" class="btn btn-ghost btn-sm gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
+                            </svg>
+                            View More Activity
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── COMPANIES ── -->
+            <div id="section-companies" class="section fade-in space-y-4">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <h2 class="text-white font-semibold">Companies</h2>
+                    <button onclick="openModal('modal-add-co')" class="btn btn-primary flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>Add Company
+                    </button>
+                </div>
+                <div class="card overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Company Name</th>
+                                <th>Created</th>
+                                <th>Staff (Used / Limit)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="co-body">
+                            <tr>
+                                <td colspan="4" class="text-center text-white/40 py-4">Loading…</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ── ALL USERS ── -->
+            <div id="section-users" class="section fade-in space-y-4">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <h2 class="text-white font-semibold">All System Users</h2>
+                    <div class="flex gap-2">
+                        <button onclick="openModal('modal-add-user')"
+                            class="btn btn-primary btn-sm flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 4v16m8-8H4" />
+                            </svg>Create User
+                        </button>
+                        <select id="filter-role" class="input" style="width:auto" onchange="filterUsers()">
+                            <option value="">All Roles</option>
+                            <option value="super_admin">Super Admin</option>
+                            <option value="admin">Admin</option>
+                            <option value="staff">Staff</option>
+                        </select>
+                        <select id="filter-co" class="input" style="width:auto" onchange="filterUsers()">
+                            <option value="">All Companies</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Company</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-body">
+                            <tr>
+                                <td colspan="5" class="text-center text-white/40 py-4">Loading…</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ── SUBSCRIPTIONS ── -->
+            <div id="section-subs" class="section fade-in">
+                <div class="space-y-6">
+                    <!-- Sub Tabs -->
+                    <div class="flex gap-4 border-b border-white/5 pb-1">
+                        <button onclick="changeSubTab('active')" id="sub-tab-active" class="sub-tab active">Active
+                            Contracts</button>
+                        <button onclick="changeSubTab('pending')" id="sub-tab-pending" class="sub-tab">Pending
+                            Payments</button>
+                        <button onclick="changeSubTab('methods')" id="sub-tab-methods" class="sub-tab">Payment
+                            Methods</button>
+                        <button onclick="changeSubTab('history')" id="sub-tab-history" class="sub-tab">Payment
+                            History</button>
+                    </div>
+
+                    <!-- Active Contracts -->
+                    <div id="sub-active" class="sub-page">
+                        <div class="card overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead>
+                                    <tr>
+                                        <th>Company</th>
+                                        <th>Model</th>
+                                        <th>Ends On</th>
+                                        <th>Days Left</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sub-companies-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Pending Approvals -->
+                    <div id="sub-pending" class="sub-page hidden">
+                        <div class="card overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead>
+                                    <tr>
+                                        <th>Company</th>
+                                        <th>Amount</th>
+                                        <th>Details</th>
+                                        <th>Receipt</th>
+                                        <th>Submitted</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sub-pending-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Methods -->
+                    <div id="sub-methods" class="sub-page hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-white font-semibold">Accepted Payment Methods</h3>
+                            <button onclick="openAddMethod()" class="btn btn-primary btn-sm">+ Add Method</button>
+                        </div>
+                        <div id="methods-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                    </div>
+
+                    <!-- Payment History -->
+                    <div id="sub-history" class="sub-page hidden">
+                        <div class="card p-4 space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                                <div>
+                                    <label class="text-white/40 text-[10px] uppercase mb-1 block">Search Company</label>
+                                    <input type="text" id="hist-search" oninput="loadPaymentHistory()"
+                                        class="input btn-sm" placeholder="Type name...">
+                                </div>
+                                <div>
+                                    <label class="text-white/40 text-[10px] uppercase mb-1 block">Status</label>
+                                    <select id="hist-status" onchange="loadPaymentHistory()" class="input btn-sm">
+                                        <option value="all">All Statuses</option>
+                                        <option value="approved">Approved</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="rejected">Rejected</option>
+                                    </select>
+                                </div>
+                                <div class="lg:col-span-2">
+                                    <label class="text-white/40 text-[10px] uppercase mb-1 block">From / To</label>
+                                    <div class="flex gap-2">
+                                        <input type="date" id="hist-from" onchange="loadPaymentHistory()"
+                                            class="input btn-sm flex-1">
+                                        <input type="date" id="hist-to" onchange="loadPaymentHistory()"
+                                            class="input btn-sm flex-1">
+                                    </div>
+                                </div>
+                                <div class="flex items-end">
+                                    <button onclick="exportPaymentHistory()"
+                                        class="btn btn-primary btn-sm w-full gap-2 whitespace-nowrap">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                        Export History
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="hist-bulk-bar"
+                                class="hidden flex items-center justify-between bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mb-4">
+                                <div class="text-amber-400 text-xs font-semibold"><span id="hist-sel-count">0</span>
+                                    records selected</div>
+                                <button onclick="bulkDeleteHistory()" class="btn btn-danger btn-sm">Delete
+                                    Selected</button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left mt-2">
+                                    <thead>
+                                        <tr>
+                                            <th class="w-10"><input type="checkbox" id="hist-check-all"
+                                                    onclick="toggleHistoryCheckboxes(this.checked)"></th>
+                                            <th>Company</th>
+                                            <th>Amount</th>
+                                            <th>Status</th>
+                                            <th>Method / Trx</th>
+                                            <th>Date & Time</th>
+                                            <th>Approved By / Remarks</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="sub-history-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── COMPANY MESSAGES ── -->
+            <div id="section-messages" class="section fade-in">
+                <div class="card p-0 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/5">
+                        <h3 class="text-white font-semibold">Incoming Admin Messages</h3>
+                        <button onclick="loadCompanyMessages()"
+                            class="text-xs text-violet-400 hover:underline flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Refresh
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-white/5 text-[10px] uppercase tracking-wider text-white/40">
+                                <tr>
+                                    <th class="px-6 py-4">Company & Admin</th>
+                                    <th class="px-6 py-4">Subject & Message</th>
+                                    <th class="px-6 py-4">Status</th>
+                                    <th class="px-6 py-4">Sent</th>
+                                    <th class="px-6 py-4 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="messages-body" class="text-xs divide-y divide-white/5">
+                                <tr>
+                                    <td colspan="5" class="text-center text-white/20 py-8">Loading messages…</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── MY PROFILE ── -->
+            <div id="section-profile" class="section fade-in">
+                <div class="max-w-xl mx-auto space-y-6">
+                    <div class="card p-8 flex flex-col items-center text-center">
+                        <div class="relative mb-4">
+                            <div id="my-profile-avatar"
+                                class="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-3xl font-bold border-4 border-white/5 shadow-2xl overflow-hidden">
+                                —
+                            </div>
+                            <button onclick="openPicActions('my-new-avatar')"
+                                class="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center shadow-lg hover:bg-amber-700 transition-all">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <h2 id="my-profile-name" class="text-xl font-bold text-white mb-1">—</h2>
+                        <div class="text-amber-400 text-sm font-medium mb-6 uppercase tracking-widest">System Master
+                            Account</div>
+
+                        <div class="w-full space-y-4 text-left">
+                            <div>
+                                <label class="text-white/40 text-xs mb-1 block">Full Name</label>
+                                <input type="text" id="my-set-name" class="input" placeholder="Update your name">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-white/40 text-xs mb-1 block">Current Password</label>
+                                    <input type="password" id="my-old-pass" class="input"
+                                        placeholder="Verify old password">
+                                </div>
+                                <div>
+                                    <label class="text-white/40 text-xs mb-1 block">New Password</label>
+                                    <input type="password" id="my-new-pass" class="input"
+                                        placeholder="Leave blank to keep current">
+                                </div>
+                            </div>
+                            <input type="hidden" id="my-new-avatar">
+                            <button id="save-profile-btn" onclick="updateMyProfile()"
+                                class="btn btn-primary w-full mt-4 py-3 text-sm">Save Profile Changes</button>
+                            <div id="profile-msg"
+                                class="hidden text-center text-sm py-2 px-4 rounded-xl bg-amber-500/10 text-amber-300 font-semibold mt-4">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── SETTINGS ── -->
+            <div id="section-settings" class="section fade-in">
+                <div class="card p-8">
+                    <h3 class="text-white font-semibold mb-6 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                        </svg>
+                        Interface Appearance
+                    </h3>
+                    <div id="theme-grid" class="mb-8"></div>
+                    <button onclick="saveTheme()" class="btn btn-primary w-full md:w-auto px-10">Save Theme
+                        Preference</button>
+                    <div id="theme-msg" class="hidden text-center text-sm mt-4 text-amber-400"></div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modal: Add Company -->
+    <div id="modal-add-co" class="modal-bg">
+        <div class="modal">
+            <h3 class="text-white font-semibold text-lg mb-5">Add New Company</h3>
+            <input id="co-name" type="text" class="input" placeholder="Company name…" />
+            <div id="co-err" class="hidden text-red-400 text-sm mt-2"></div>
+            <div class="flex gap-3 mt-5">
+                <button onclick="createCompany()" class="btn btn-primary flex-1">Create</button>
+                <button onclick="closeModal('modal-add-co')" class="btn flex-1"
+                    style="background:rgba(255,255,255,0.07);color:#94a3b8">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Manage Subscription -->
+    <div id="modal-manage-sub" class="modal-bg">
+        <div class="modal" style="max-width:400px">
+            <h3 class="text-white font-semibold text-lg mb-5">Configure Subscription</h3>
+            <input type="hidden" id="set-sub-id" />
+            <div class="space-y-4">
+                <div>
+                    <label class="text-white/40 text-[10px] uppercase font-bold mb-1 block">Contract Model</label>
+                    <select id="set-sub-model" class="input">
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                        <option value="once">One-Time</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-white/40 text-[10px] uppercase font-bold mb-1 block">Expiration Date</label>
+                    <input type="date" id="set-sub-date" class="input" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-white/40 text-[10px] uppercase font-bold mb-1 block">Amount ($)</label>
+                        <input type="number" id="set-sub-amount" class="input" placeholder="0.00" />
+                    </div>
+                    <div>
+                        <label class="text-white/40 text-[10px] uppercase font-bold mb-1 block">Grace Days</label>
+                        <input type="number" id="set-sub-grace" class="input" value="3" />
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="saveSubSettings()" class="btn btn-primary flex-1">Save Contract</button>
+                <button onclick="closeModal('modal-manage-sub')" class="btn flex-1"
+                    style="background:rgba(255,255,255,0.07);color:#94a3b8">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Payment Method -->
+    <div id="modal-add-method" class="modal-bg">
+        <div class="modal" style="max-width:450px">
+            <h3 class="text-white font-semibold mb-5">New Payment Method</h3>
+            <div class="space-y-4">
+                <input id="meth-name" type="text" class="input" placeholder="Method Name (e.g. Bank Transfer)" />
+                <textarea id="meth-info" class="input" placeholder="Account Number / Details…" rows="2"></textarea>
+                <div class="flex items-center gap-4 p-3 bg-white/5 rounded-xl border border-white/10">
+                    <div class="flex-1">
+                        <label class="text-white/40 text-[10px] uppercase font-bold mb-1 block">QR Code
+                            (Optional)</label>
+                        <button onclick="document.getElementById('meth-qr-file').click()"
+                            class="btn btn-sm bg-white/10 w-full">Upload QR</button>
+                    </div>
+                    <input type="file" id="meth-qr-file" class="hidden" accept="image/*"
+                        onchange="previewUpload(this, null, 'meth-qr')" />
+                    <input type="hidden" id="meth-qr" />
+                </div>
+                <input id="meth-note" type="text" class="input" placeholder="Internal note or instruction…" />
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="saveMethod()" class="btn btn-primary flex-1">Add Method</button>
+                <button onclick="closeModal('modal-add-method')" class="btn flex-1"
+                    style="background:rgba(255,255,255,0.07);color:#94a3b8">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Company -->
+    <div id="modal-edit-co" class="modal-bg">
+        <div class="modal" style="max-width:460px">
+            <h3 class="text-white font-semibold text-lg mb-5">Edit Company Info</h3>
+            <input type="hidden" id="edit-co-id" />
+            <div class="space-y-4">
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Company Name</label>
+                    <input id="edit-co-name" type="text" class="input" placeholder="Company name…" />
+                </div>
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Logo URL</label>
+                    <input id="edit-co-logo" type="text" class="input" placeholder="Logo URL…" />
+                </div>
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Staff Limit <span
+                            class="text-white/25 font-normal">(max accounts admin can create — set 0 for
+                            unlimited)</span></label>
+                    <input id="edit-co-staff-limit" type="number" min="0" class="input"
+                        placeholder="e.g. 20 — leave 0 for unlimited" />
+                    <div id="edit-co-staff-usage" class="text-xs text-white/30 mt-1"></div>
+                </div>
+            </div>
+            <div id="edit-co-err" class="hidden text-red-400 text-sm mt-3"></div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="updateCompanyData()" class="btn btn-primary flex-1">Save Changes</button>
+                <button onclick="closeModal('modal-edit-co')" class="btn flex-1"
+                    style="background:rgba(255,255,255,0.07);color:#94a3b8">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add User -->
+    <div id="modal-add-user" class="modal-bg">
+        <div class="modal">
+            <h3 class="text-white font-semibold text-lg mb-5">Create System Profile</h3>
+            <div class="space-y-3">
+                <input id="u-name" type="text" class="input" placeholder="Full name" />
+                <input id="u-username" type="text" class="input" placeholder="Username" />
+                <input id="u-pass" type="password" class="input" placeholder="Password" />
+                <select id="u-role" class="input">
+                    <option value="staff">Staff</option>
+                    <option value="admin">Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                </select>
+                <select id="u-co" class="input">
+                    <option value="">No Company</option>
+                </select>
+                <div id="u-err" class="hidden text-red-400 text-sm"></div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="createUser()" class="btn btn-primary flex-1">Create</button>
+                <button onclick="closeModal('modal-add-user')" class="btn flex-1"
+                    style="background:rgba(255,255,255,0.07);color:#94a3b8">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modal: Photo Actions -->
+    <div id="modal-pic-actions" class="modal-bg">
+        <div class="modal" style="max-width:320px">
+            <h3 class="text-white font-semibold mb-5 text-center">Change Photo</h3>
+            <div class="flex flex-col gap-3">
+                <button onclick="document.getElementById('profile-file-input').click()" class="clock-btn btn-in">Upload
+                    Image</button>
+                <button onclick="closeModal('modal-pic-actions'); openCamera(activeCamInput)"
+                    class="clock-btn btn-brk">Take Photo</button>
+                <button onclick="closeModal('modal-pic-actions')" class="clock-btn btn-out">Cancel</button>
+            </div>
+            <input type="file" id="profile-file-input" class="hidden" accept="image/*"
+                onchange="previewProfileUpload(this)">
+        </div>
+    </div>
+    <div id="modal-camera" class="modal-bg">
+        <div class="modal" style="max-width:500px">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-white font-semibold text-lg">Capture Photo</h3>
+                <button onclick="closeCamera()" class="text-white/40 hover:text-white">✕</button>
+            </div>
+            <div class="relative rounded-2xl overflow-hidden bg-black aspect-video mb-4">
+                <video id="camera-video" autoplay playsinline class="w-full h-full object-cover"></video>
+                <canvas id="camera-canvas" class="hidden"></canvas>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="capturePhoto()" class="btn btn-primary flex-1">Capture & Save</button>
+                <button onclick="closeCamera()" class="btn flex-1"
+                    style="background:rgba(255,255,255,0.07);color:#94a3b8">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <div id="modal-edit-user" class="modal-bg">
+        <div class="modal" style="max-width:500px">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-white font-semibold text-lg">Edit System User</h3>
+                <button onclick="closeModal('modal-edit-user')" class="text-white/40 hover:text-white">✕</button>
+            </div>
+            <input type="hidden" id="edit-u-id" />
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2">
+                    <label class="text-white/40 text-xs mb-1 block">Full Name</label>
+                    <input id="edit-u-name" type="text" class="input" placeholder="Full name" />
+                </div>
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Username</label>
+                    <input id="edit-u-username" type="text" class="input" placeholder="Username" />
+                </div>
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Password</label>
+                    <input id="edit-u-pass" type="text" class="input" placeholder="Password" />
+                </div>
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Role</label>
+                    <select id="edit-u-role" class="input">
+                        <option value="staff">Staff</option>
+                        <option value="admin">Admin</option>
+                        <option value="super_admin">Super Admin</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Company</label>
+                    <select id="edit-u-co" class="input"></select>
+                </div>
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Status</label>
+                    <select id="edit-u-suspended" class="input">
+                        <option value="false">Active</option>
+                        <option value="true">Suspended / Paused</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Salary</label>
+                    <input id="edit-u-salary" type="text" class="input" placeholder="Salary" />
+                </div>
+                <div>
+                    <label class="text-white/40 text-xs mb-1 block">Duty Time</label>
+                    <input id="edit-u-duty" type="text" class="input" placeholder="Duty Time" />
+                </div>
+                <div class="col-span-2">
+                    <label class="text-white/40 text-xs mb-1 block">Profile Picture URL</label>
+                    <input id="edit-u-avatar" type="text" class="input" placeholder="Avatar URL" />
+                </div>
+                <div class="col-span-2">
+                    <label class="text-white/40 text-xs mb-1 block">Custom Note</label>
+                    <textarea id="edit-u-note" class="input" placeholder="Internal notes…"></textarea>
+                </div>
+            </div>
+            <div id="edit-u-err" class="hidden text-red-400 text-sm mt-3"></div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="updateUserData()" class="btn btn-primary flex-1">Save Changes</button>
+                <button onclick="closeModal('modal-edit-user')" class="btn flex-1"
+                    style="background:rgba(255,255,255,0.07);color:#94a3b8">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="supabase-config.js"></script>
+    <script>
+        let myUser = null, myProfile = null, allUsers = [], allCompanies = [];
+
+        let activeCamInput = null, stream = null;
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('overlay').classList.toggle('show') }
+        function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('overlay').classList.remove('show') }
+        function openModal(id) { document.getElementById(id).classList.add('show') }
+        function closeModal(id) { document.getElementById(id).classList.remove('show') }
+        function esc(s) { if (!s) return ''; return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+        function timeAgo(t) { const s = Math.floor((Date.now() - new Date(t)) / 1000); if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + 'm ago'; if (s < 86400) return Math.floor(s / 3600) + 'h ago'; return Math.floor(s / 86400) + 'd ago' }
+        function initials(n) { if (!n || !n.trim()) return '?'; return n.split(' ').filter(p => p).map(p => p[0]).join('').toUpperCase().slice(0, 2) }
+
+        function openPicActions(inputId) { activeCamInput = inputId; openModal('modal-pic-actions'); }
+        async function openCamera(inputId) {
+            activeCamInput = inputId;
+            openModal('modal-camera');
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                document.getElementById('camera-video').srcObject = stream;
+            } catch (err) {
+                alert('Camera access denied or not found');
+                closeModal('modal-camera');
+            }
+        }
+        function closeCamera() { if (stream) stream.getTracks().forEach(t => t.stop()); closeModal('modal-camera'); }
+        async function capturePhoto() {
+            const video = document.getElementById('camera-video');
+            const canvas = document.getElementById('camera-canvas');
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.8));
+            const path = `avatars/${myProfile.id}/${Date.now()}.jpg`;
+            const { error } = await sb.storage.from('avatars').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+            if (error) return alert('Camera upload failed: ' + error.message);
+            const { data: pub } = sb.storage.from('avatars').getPublicUrl(path);
+            document.getElementById(activeCamInput).value = pub.publicUrl;
+            if (activeCamInput === 'my-new-avatar') {
+                const av = document.getElementById('my-profile-avatar');
+                av.innerHTML = `<img src="${pub.publicUrl}" class="w-full h-full object-cover">`;
+                const sbAv = document.getElementById('sb-avatar');
+                if (sbAv) sbAv.innerHTML = `<img src="${pub.publicUrl}" class="w-full h-full rounded-full object-cover">`;
+            }
+            closeCamera();
+        }
+        async function previewProfileUpload(input) {
+            const file = input.files[0]; if (!file || !activeCamInput) return;
+            closeModal('modal-pic-actions');
+
+            const cleanName = file.name.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
+            const path = `avatars/${myProfile.id}/${Date.now()}_${cleanName}`;
+
+            const { error } = await sb.storage.from('avatars').upload(path, file, { upsert: true });
+            if (error) {
+                console.error('Upload Error:', error);
+                return alert('Avatar upload failed: ' + (error.message || 'Check storage buckets'));
+            }
+
+            const { data: pub } = sb.storage.from('avatars').getPublicUrl(path);
+            document.getElementById(activeCamInput).value = pub.publicUrl;
+
+            if (activeCamInput === 'my-new-avatar') {
+                const av = document.getElementById('my-profile-avatar');
+                av.innerHTML = `<img src="${pub.publicUrl}" class="w-full h-full object-cover">`;
+                const sbAv = document.getElementById('sb-avatar');
+                if (sbAv) sbAv.innerHTML = `<img src="${pub.publicUrl}" class="w-full h-full rounded-full object-cover">`;
+            }
+        }
+        async function previewUpload(input, previewId, hiddenId) {
+            const file = input.files[0]; if (!file) return;
+            const path = `sa_uploads/${Date.now()}_${file.name.replace(/[^a-z0-9.]/gi, '_')}`;
+            const { error } = await sb.storage.from('avatars').upload(path, file);
+            if (error) {
+                console.error('Upload Error:', error);
+                return alert('Upload failed: ' + error.message);
+            }
+            const { data: pub } = sb.storage.from('avatars').getPublicUrl(path);
+            document.getElementById(hiddenId).value = pub.publicUrl;
+            if (previewId) {
+                const prev = document.getElementById(previewId);
+                if (prev) { prev.src = pub.publicUrl; prev.classList.remove('hidden'); }
+            }
+        }
+        function openFullView(url) {
+            const modal = document.createElement('div');
+            modal.className = 'modal-bg show';
+            modal.onclick = () => modal.remove();
+            modal.innerHTML = `<div class="flex flex-col items-center justify-center min-h-screen p-4">
+                <img src="${url}" class="max-w-full max-h-[90vh] rounded-xl shadow-2xl border border-white/10" />
+                <p class="text-white/40 text-xs mt-4">Click anywhere to close</p>
+            </div>`;
+            document.body.appendChild(modal);
+        }
+
+        const themes = [
+            { id: 'theme-1', name: 'Premium Dark', primary: '#6c63ff', accent: '#2dd4bf', bg: '#0d0d1a', gradient: 'linear-gradient(135deg, #0f0c29 0%, #302b63 40%, #24243e 100%)', orbs: true },
+            { id: 'theme-2', name: 'Deep Space', primary: '#38bdf8', accent: '#818cf8', bg: '#020617', gradient: 'linear-gradient(180deg, #0f172a 0%, #020617 100%)', orbs: true },
+            { id: 'theme-3', name: 'Emerald Night', primary: '#34d399', accent: '#059669', bg: '#064e3b', gradient: 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)' },
+            { id: 'theme-4', name: 'Blood Moon', primary: '#f87171', accent: '#b91d1d', bg: '#450a0a', gradient: 'linear-gradient(135deg, #450a0a 0%, #7f1d1d 100%)', orbs: true },
+            { id: 'theme-5', name: 'Cyberpunk', primary: '#00ffcc', accent: '#ff00ff', bg: '#1a1a2e', gradient: 'linear-gradient(135deg, #1a1a2e 0%, #2e1065 100%)', orbs: true },
+            { id: 'theme-6', name: 'Crystal Light', primary: '#6366f1', accent: '#06b6d4', bg: '#f8fafc', gradient: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', light: true, orbs: true },
+            { id: 'theme-7', name: 'Snowy Peaks', primary: '#3b82f6', accent: '#93c5fd', bg: '#ffffff', gradient: 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)', light: true },
+            { id: 'theme-8', name: 'Rose Garden', primary: '#ec4899', accent: '#fbcfe8', bg: '#fff1f2', gradient: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)', light: true, orbs: true },
+            { id: 'theme-9', name: 'Morning Mist', primary: '#14b8a6', accent: '#99f6e4', bg: '#f0fdfa', gradient: 'linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)', light: true },
+            { id: 'theme-10', name: 'Aurora Light', primary: '#10b981', accent: '#a7f3d0', bg: '#f0fdf4', gradient: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', light: true, orbs: true }
+        ];
+
+        let ovChart = null;
+        let activityPage = 0;
+        const activityLimit = 50;
+
+        async function loadOverview() {
+            const range = document.getElementById('ov-range').value;
+            const customDates = document.getElementById('ov-custom-dates');
+            if (range === 'custom') customDates.classList.remove('hidden');
+            else customDates.classList.add('hidden');
+
+            const dates = getRange(range, 'ov-start', 'ov-end');
+
+            // 1. Fetch Stats
+            loadOverviewStats(dates);
+
+            // 2. Render Graph
+            renderOverviewGraph();
+
+            // 3. Load Activity
+            activityPage = 0;
+            loadActivity();
+        }
+
+        async function loadOverviewStats(dates) {
+            let coQuery = sb.from('companies').select('*');
+            let userQuery = sb.from('profiles').select('*');
+            let postQuery = sb.from('posts').select('*');
+            let payQuery = sb.from('payment_submissions').select('amount').eq('status', 'approved');
+
+            if (dates.start) {
+                coQuery = coQuery.gte('created_at', dates.start.toISOString());
+                userQuery = userQuery.gte('created_at', dates.start.toISOString());
+                postQuery = postQuery.gte('created_at', dates.start.toISOString());
+                payQuery = payQuery.gte('created_at', dates.start.toISOString());
+            }
+            if (dates.end) {
+                coQuery = coQuery.lte('created_at', dates.end.toISOString());
+                userQuery = userQuery.lte('created_at', dates.end.toISOString());
+                postQuery = postQuery.lte('created_at', dates.end.toISOString());
+                payQuery = payQuery.lte('created_at', dates.end.toISOString());
+            }
+
+            const [{ data: cos }, { data: users }, { data: posts }, { data: earnings }] = await Promise.all([
+                coQuery, userQuery, postQuery, payQuery
+            ]);
+
+            document.getElementById('st-cos').textContent = cos?.length || 0;
+            document.getElementById('st-users').textContent = users?.length || 0;
+            document.getElementById('st-posts').textContent = posts?.length || 0;
+
+            const totalEarn = (earnings || []).reduce((acc, curr) => acc + (curr.amount || 0), 0);
+            document.getElementById('st-earn').textContent = '$' + totalEarn.toLocaleString();
+
+            // Snapshot stats (Not range filtered)
+            const { data: allCos } = await sb.from('companies').select('*');
+            const now = new Date();
+            let paid = 0, due = 0, notSet = 0;
+            (allCos || []).forEach(c => {
+                if (!c.subscription_model || !c.subscription_end_date) notSet++;
+                else {
+                    const end = new Date(c.subscription_end_date);
+                    if (end >= now) paid++;
+                    else due++;
+                }
+            });
+            document.getElementById('st-paid').textContent = paid;
+            document.getElementById('st-due').textContent = due;
+            document.getElementById('st-notset').textContent = notSet;
+        }
+
+        async function renderOverviewGraph() {
+            const range = document.getElementById('ov-range').value;
+            const dates = getRange(range, 'ov-start', 'ov-end');
+            const metric = document.getElementById('ov-graph-metric').value;
+
+            const labels = [];
+            const values = [];
+            const now = new Date();
+
+            let daysToLoad = 7; // Default
+            if (range === 'today' || range === 'yesterday') daysToLoad = 1;
+            else if (range === 'week') daysToLoad = 7;
+            else if (range === 'month') daysToLoad = 30;
+            else if (range === 'year') daysToLoad = 365;
+            else if (range === 'custom' && dates.start && dates.end) {
+                daysToLoad = Math.ceil((dates.end - dates.start) / (1000 * 60 * 60 * 24));
+            }
+
+            // Cap days to load to avoid performance issues
+            daysToLoad = Math.min(daysToLoad, 90);
+
+            for (let i = daysToLoad; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                values.push(0);
+            }
+
+            let table = 'payment_submissions';
+            if (metric === 'users') table = 'profiles';
+            if (metric === 'posts') table = 'posts';
+            if (metric === 'att') table = 'attendance';
+
+            const startDate = new Date(now);
+            startDate.setDate(startDate.getDate() - daysToLoad);
+            startDate.setHours(0, 0, 0, 0);
+
+            let query = sb.from(table).select('*').gte('created_at', startDate.toISOString());
+            if (metric === 'earnings') query = query.eq('status', 'approved');
+
+            const { data } = await query;
+            (data || []).forEach(item => {
+                const date = new Date(item.created_at);
+                const diff = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+                if (diff >= 0 && diff <= daysToLoad) {
+                    const idx = daysToLoad - diff;
+                    if (metric === 'earnings') values[idx] += (item.amount || 0);
+                    else values[idx]++;
+                }
+            });
+
+            if (ovChart) ovChart.destroy();
+            const ctx = document.getElementById('ovChart').getContext('2d');
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(245, 158, 11, 0.2)');
+            gradient.addColorStop(1, 'rgba(245, 158, 11, 0)');
+
+            ovChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: metric.charAt(0).toUpperCase() + metric.slice(1),
+                        data: values,
+                        borderColor: '#f59e0b',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#f59e0b',
+                        pointBorderColor: 'rgba(255,255,255,0.2)',
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        fill: true,
+                        backgroundColor: gradient,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadActivity(isLoadMore = false) {
+            if (!isLoadMore) {
+                activityPage = 0;
+                document.getElementById('recent-body').innerHTML = '<tr><td colspan="6" class="text-center text-white/20 py-8">Loading...</td></tr>';
+            }
+
+            const { data, error } = await sb.from('attendance')
+                .select('*, profiles(full_name, companies(name))')
+                .order('created_at', { ascending: false })
+                .range(activityPage * activityLimit, (activityPage + 1) * activityLimit - 1);
+
+            const body = document.getElementById('recent-body');
+            const statusLabels = { in: 'Check In', break_in: 'Break End', break: 'Break', out: 'Check Out' };
+            const bCls = { in: 'badge-in', break_in: 'badge-in', break: 'badge-break', out: 'badge-out' };
+
+            const html = (data || []).map(r => `
+                <tr class="text-xs group">
+                    <td><input type="checkbox" class="act-item-check" value="${r.id}" onclick="updateActivityBulkBar()"></td>
+                    <td>
+                        <div class="font-medium text-white">${esc(r.profiles?.full_name || '—')}</div>
+                    </td>
+                    <td><span class="badge ${bCls[r.status] || 'badge-out'}">${statusLabels[r.status] || r.status}</span></td>
+                    <td class="text-white/60">${esc(r.profiles?.companies?.name || '—')}</td>
+                    <td class="text-white/40">${new Date(r.created_at).toLocaleString()}</td>
+                    <td class="text-right">
+                        <button onclick="deleteActivity('${r.id}')" class="action-btn delete opacity-0 group-hover:opacity-100">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            if (isLoadMore) body.innerHTML += html;
+            else body.innerHTML = html || '<tr><td colspan="6" class="text-center text-white/20 py-8">No activity found.</td></tr>';
+
+            if (data?.length < activityLimit) document.getElementById('btn-load-more').classList.add('hidden');
+            else document.getElementById('btn-load-more').classList.remove('hidden');
+
+            activityPage++;
+            updateActivityBulkBar();
+        }
+
+        function toggleActivityCheckboxes(checked) {
+            document.querySelectorAll('.act-item-check').forEach(c => c.checked = checked);
+            updateActivityBulkBar();
+        }
+
+        function updateActivityBulkBar() {
+            const checked = document.querySelectorAll('.act-item-check:checked');
+            const bar = document.getElementById('act-bulk-bar');
+            if (checked.length > 0) {
+                bar.classList.remove('hidden');
+                document.getElementById('act-sel-count').textContent = checked.length;
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+
+        async function deleteActivity(id) {
+            if (!confirm('Permanent delete this activity record?')) return;
+            await sb.from('attendance').delete().eq('id', id);
+            loadActivity();
+        }
+
+        async function bulkDeleteActivity() {
+            const checked = Array.from(document.querySelectorAll('.act-item-check:checked')).map(c => c.value);
+            if (!checked.length) return;
+            if (!confirm(`Delete ${checked.length} selected activity records?`)) return;
+            await sb.from('attendance').delete().in('id', checked);
+            document.getElementById('act-check-all').checked = false;
+            loadActivity();
+        }
+
+        function getRange(type, startId, endId) {
+            const now = new Date();
+            let start = null, end = null;
+            if (type === 'today') { start = new Date(now); start.setHours(0, 0, 0, 0); }
+            if (type === 'yesterday') { start = new Date(now); start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0); end = new Date(start); end.setHours(23, 59, 59, 999); }
+            if (type === 'week') { start = new Date(now); start.setDate(start.getDate() - 7); }
+            if (type === 'month') { start = new Date(now); start.setMonth(start.getMonth() - 1); }
+            if (type === 'year') { start = new Date(now); start.setFullYear(start.getFullYear() - 1); }
+            if (type === 'custom') {
+                const s = document.getElementById(startId).value;
+                const e = document.getElementById(endId).value;
+                if (s) start = new Date(s + 'T00:00:00');
+                if (e) end = new Date(e + 'T23:59:59');
+            }
+            return { start, end };
+        }
+
+        async function loadCompanies() {
+            const { data } = await sb.from('companies').select('*').order('created_at', { ascending: false });
+            allCompanies = data || [];
+            const body = document.getElementById('co-body');
+            if (!allCompanies.length) { body.innerHTML = '<tr><td colspan="4" class="text-center text-white/40 py-4">No companies yet.</td></tr>'; return }
+            // Get staff count per company
+            const { data: prof } = await sb.from('profiles').select('company_id');
+            const countMap = {};
+            (prof || []).forEach(p => { if (p.company_id) countMap[p.company_id] = (countMap[p.company_id] || 0) + 1 });
+            body.innerHTML = allCompanies.map(co => {
+                const used = countMap[co.id] || 0;
+                const limit = co.staff_limit;
+                let staffDisplay, limitColor;
+                if (limit == null || limit === 0) {
+                    staffDisplay = `<span class="text-white/70">${used}</span> <span class="text-white/25 text-xs">/ Unlimited</span>`;
+                    limitColor = 'text-white/70';
+                } else {
+                    const pct = used / limit;
+                    limitColor = pct >= 1 ? 'text-red-400' : pct >= 0.8 ? 'text-amber-400' : 'text-emerald-400';
+                    staffDisplay = `<span class="${limitColor} font-semibold">${used}</span> <span class="text-white/40 text-xs">/ ${limit}</span>`;
+                }
+                return `<tr>
+    <td><div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 flex items-center justify-center text-amber-400 font-bold text-xs">${esc(co.name[0]?.toUpperCase())}</div>
+        <span class="text-white font-medium">${esc(co.name)}</span></div></td>
+    <td class="text-white/50 text-xs">${new Date(co.created_at).toLocaleDateString()}</td>
+    <td>${staffDisplay}</td>
+    <td>
+        <div class="flex gap-2">
+            <button onclick="impersonateCompany('${co.id}')" title="View as Admin" class="action-btn view">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            </button>
+            <button onclick="openEditCompany('${co.id}')" title="Edit Company" class="action-btn edit">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </button>
+            <button onclick="deleteCompany('${co.id}')" title="Delete Company" class="action-btn delete">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+        </div>
+    </td>
+  </tr>`;
+            }).join('');
+            // Populate filter dropdown & create modal dropdown
+            const sel = document.getElementById('filter-co');
+            const userCoSel = document.getElementById('u-co');
+            const editUserCoSel = document.getElementById('edit-u-co');
+            const coHtml = '<option value="">No Company</option>' + allCompanies.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+            sel.innerHTML = '<option value="">All Companies</option>' + allCompanies.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+            userCoSel.innerHTML = coHtml;
+            editUserCoSel.innerHTML = coHtml;
+        }
+
+        async function createCompany() {
+            const name = document.getElementById('co-name').value.trim();
+            if (!name) return;
+            const { error } = await sb.from('companies').insert({ name });
+            if (error) { document.getElementById('co-err').textContent = error.message; document.getElementById('co-err').classList.remove('hidden'); return }
+            document.getElementById('co-name').value = '';
+            closeModal('modal-add-co');
+            await loadCompanies();
+            await loadOverview();
+        }
+
+        async function deleteCompany(id) {
+            if (!confirm('Delete this company and all its data?')) return;
+            await sb.from('companies').delete().eq('id', id);
+            await loadCompanies();
+            await loadOverview();
+        }
+
+        async function loadPaymentHistory() {
+            const search = document.getElementById('hist-search').value.toLowerCase();
+            const status = document.getElementById('hist-status').value;
+            const from = document.getElementById('hist-from').value;
+            const to = document.getElementById('hist-to').value;
+
+            let q = sb.from('payment_submissions').select('*, companies(name)').order('created_at', { ascending: false });
+
+            if (status !== 'all') q = q.eq('status', status);
+            if (from) q = q.gte('created_at', from + 'T00:00:00');
+            if (to) q = q.lte('created_at', to + 'T23:59:59');
+
+            const { data } = await q;
+            let filtered = data || [];
+            if (search) filtered = filtered.filter(p => p.companies?.name?.toLowerCase().includes(search));
+
+            const body = document.getElementById('sub-history-body');
+            body.innerHTML = filtered.map(p => `
+                <tr class="text-xs">
+                    <td><input type="checkbox" class="hist-item-check" value="${p.id}" onclick="updateHistoryBulkBar()"></td>
+                    <td class="text-white">${esc(p.companies?.name)}</td>
+                    <td class="text-emerald-400 font-bold">$${p.amount}</td>
+                    <td><span class="badge ${p.status === 'approved' ? 'badge-in' : p.status === 'pending' ? 'badge-break' : 'badge-out'}">${p.status}</span></td>
+                    <td class="text-white/40">
+                        <div class="text-white/70">${esc(p.trx_id || '—')}</div>
+                        <div class="text-[9px]">${esc(p.payment_method || '—')}</div>
+                    </td>
+                    <td class="text-white/40">${new Date(p.created_at).toLocaleString()}</td>
+                    <td class="text-white/40 italic">${esc(p.remark || '—')}</td>
+                    <td>
+                        <button onclick="deleteHistoryRecord('${p.id}')" class="action-btn delete" title="Delete record">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            if (!filtered.length) body.innerHTML = '<tr><td colspan="8" class="text-center text-white/20 py-8">No payment history found.</td></tr>';
+            return filtered;
+        }
+
+        function toggleHistoryCheckboxes(checked) {
+            document.querySelectorAll('.hist-item-check').forEach(c => c.checked = checked);
+            updateHistoryBulkBar();
+        }
+
+        function updateHistoryBulkBar() {
+            const checked = document.querySelectorAll('.hist-item-check:checked');
+            const bar = document.getElementById('hist-bulk-bar');
+            if (checked.length > 0) {
+                bar.classList.remove('hidden');
+                document.getElementById('hist-sel-count').textContent = checked.length;
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+
+        async function deleteHistoryRecord(id) {
+            if (!confirm('Permanently delete this payment record?')) return;
+            await sb.from('payment_submissions').delete().eq('id', id);
+            loadPaymentHistory();
+        }
+
+        async function bulkDeleteHistory() {
+            const checked = Array.from(document.querySelectorAll('.hist-item-check:checked')).map(c => c.value);
+            if (!checked.length) return;
+            if (!confirm(`Delete ${checked.length} selected records permanently?`)) return;
+            await sb.from('payment_submissions').delete().in('id', checked);
+            document.getElementById('hist-check-all').checked = false;
+            loadPaymentHistory();
+            updateHistoryBulkBar();
+        }
+
+        async function exportPaymentHistory() {
+            const data = await loadPaymentHistory();
+            if (!data?.length) return alert('No records to export');
+            const headers = ['Company', 'Amount', 'Status', 'Transaction ID', 'Method', 'Date', 'Remark'];
+            const rows = data.map(p => [
+                p.companies?.name || '—',
+                p.amount,
+                p.status,
+                p.trx_id || '—',
+                p.payment_method || '—',
+                new Date(p.created_at).toLocaleString(),
+                (p.remark || '').replace(/,/g, ' ')
+            ]);
+            const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].map(e => e.join(",")).join("\n");
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", `payment_history_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
+        async function openEditCompany(id) {
+            const co = allCompanies.find(c => c.id === id);
+            if (!co) return;
+            // Get current staff count for this company
+            const { data: staffData } = await sb.from('profiles').select('id').eq('company_id', id);
+            const currentCount = staffData?.length || 0;
+            document.getElementById('edit-co-id').value = co.id;
+            document.getElementById('edit-co-name').value = co.name || '';
+            document.getElementById('edit-co-logo').value = co.logo_url || '';
+            document.getElementById('edit-co-staff-limit').value = co.staff_limit || 0;
+            document.getElementById('edit-co-staff-usage').textContent = `Currently has ${currentCount} account${currentCount !== 1 ? 's' : ''} in this company.`;
+            document.getElementById('edit-co-err').classList.add('hidden');
+            openModal('modal-edit-co');
+        }
+
+        async function updateCompanyData() {
+            const id = document.getElementById('edit-co-id').value;
+            const name = document.getElementById('edit-co-name').value.trim();
+            const logo = document.getElementById('edit-co-logo').value.trim();
+            const staffLimit = parseInt(document.getElementById('edit-co-staff-limit').value) || 0;
+            if (!name) return;
+
+            const { error } = await sb.from('companies').update({ name, logo_url: logo, staff_limit: staffLimit > 0 ? staffLimit : null }).eq('id', id);
+            if (error) {
+                const err = document.getElementById('edit-co-err');
+                err.textContent = error.message;
+                err.classList.remove('hidden');
+                return;
+            }
+            closeModal('modal-edit-co');
+            await loadCompanies();
+            await loadOverview();
+        }
+
+        function impersonateCompany(coId) {
+            // Store the impersonating ID in sessionStorage (temporary for the session)
+            sessionStorage.setItem('office_hub_impersonate', coId);
+            window.location.href = 'admin.html';
+        }
+
+        async function loadMyProfile() {
+            document.getElementById('my-profile-name').textContent = myProfile.full_name || myProfile.username;
+            document.getElementById('my-set-name').value = myProfile.full_name || '';
+            document.getElementById('my-old-pass').value = '';
+            document.getElementById('my-new-pass').value = '';
+
+            const av = document.getElementById('my-profile-avatar');
+            if (myProfile.avatar_url) av.innerHTML = `<img src="${myProfile.avatar_url}" class="w-full h-full object-cover">`;
+            else av.textContent = initials(myProfile.full_name || myProfile.username);
+        }
+
+        async function updateMyProfile() {
+            const btn = document.getElementById('save-profile-btn');
+            const msg = document.getElementById('profile-msg');
+            const newName = document.getElementById('my-set-name').value.trim();
+            const oldPass = document.getElementById('my-old-pass').value;
+            const newPass = document.getElementById('my-new-pass').value;
+            const newAv = document.getElementById('my-new-avatar').value;
+
+            if (!newName) return alert('Name cannot be empty');
+            if (newPass && oldPass !== myProfile.password) return alert('Current password verification failed.');
+
+            btn.disabled = true; btn.textContent = 'Saving…';
+
+            const updates = { full_name: newName };
+            if (newPass) updates.password = newPass;
+            if (newAv) updates.avatar_url = newAv;
+
+            const { data, error } = await sb.from('profiles').update(updates).eq('id', myProfile.id).select().single();
+
+            if (error) alert('Profile update failed: ' + error.message);
+            else {
+                myProfile = data;
+                localStorage.setItem('office_hub_user', JSON.stringify(data));
+
+                const n = data.full_name || data.username;
+                document.getElementById('sb-name').textContent = n;
+                const sbAv = document.getElementById('sb-avatar');
+                if (data.avatar_url) sbAv.innerHTML = `<img src="${data.avatar_url}" class="w-full h-full rounded-full object-cover">`;
+                else sbAv.textContent = initials(n);
+
+                document.getElementById('my-profile-name').textContent = n;
+                const av = document.getElementById('my-profile-avatar');
+                if (data.avatar_url) av.innerHTML = `<img src="${data.avatar_url}" class="w-full h-full object-cover">`;
+
+                msg.textContent = '✅ Profile updated successfully!';
+                msg.classList.remove('hidden');
+                setTimeout(() => msg.classList.add('hidden'), 3000);
+            }
+            btn.disabled = false; btn.textContent = 'Save Profile Changes';
+        }
+
+        async function loadUsers() {
+            const { data } = await sb.from('profiles').select('*,companies(name)').order('created_at', { ascending: false });
+            allUsers = data || [];
+            renderUsers();
+        }
+
+        function filterUsers() { renderUsers(); }
+
+        function renderUsers() {
+            const roleFilter = document.getElementById('filter-role').value;
+            const coFilter = document.getElementById('filter-co').value;
+            const body = document.getElementById('users-body'); // Matching HTML ID
+
+            const filtered = allUsers.filter(u => {
+                if (roleFilter && u.role !== roleFilter) return false;
+                if (coFilter && u.company_id !== coFilter) return false;
+                return true;
+            });
+
+            if (!filtered.length) {
+                body.innerHTML = '<tr><td colspan="5" class="text-center text-white/40 py-4">No users found.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = filtered.map(u => `<tr>
+    <td>
+        <div class="flex items-center gap-2">
+            <div class="avatar">${u.avatar_url ? `<img src="${u.avatar_url}" class="w-full h-full rounded-full object-cover">` : initials(u.full_name)}</div>
+            <div>
+                <span class="text-white font-medium text-sm">${esc(u.full_name || '—')}</span>
+                ${(String(u.is_suspended) === 'true') ? `<span class="text-[10px] text-red-400 block font-bold">SUSPENDED</span>` : ''}
+            </div>
+        </div>
+    </td>
+    <td class="text-white/60 text-xs">${esc(u.username || '—')}</td>
+    <td><span class="badge ${u.role === 'admin' ? 'badge-admin' : u.role === 'super_admin' ? 'badge-sa' : 'badge-staff'}">${u.role}</span></td>
+    <td class="text-white/60 text-xs">${esc(u.companies?.name || '—')}</td>
+    <td>
+        <div class="flex gap-2">
+            <button onclick="openEditUser('${u.id}')" class="action-btn edit" title="Edit User">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </button>
+            <button onclick="deleteUser('${u.id}')" class="action-btn delete" title="Remove User">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+        </div>
+    </td>
+  </tr>`).join('');
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('Remove this user and their attendance data?')) return;
+            await sb.from('profiles').delete().eq('id', id);
+            await loadUsers();
+            await loadOverview();
+        }
+
+        async function openEditUser(id) {
+            // Fetch LATEST data from Supabase to avoid stale state
+            const { data: u, error } = await sb.from('profiles').select('*').eq('id', id).single();
+            if (error || !u) {
+                alert('Error fetching user data: ' + error?.message);
+                return;
+            }
+
+            document.getElementById('edit-u-id').value = u.id;
+            document.getElementById('edit-u-name').value = u.full_name || '';
+            document.getElementById('edit-u-username').value = u.username || '';
+            document.getElementById('edit-u-pass').value = u.password || '';
+            document.getElementById('edit-u-role').value = u.role;
+            document.getElementById('edit-u-co').value = u.company_id || '';
+            document.getElementById('edit-u-suspended').value = (String(u.is_suspended) === 'true') ? 'true' : 'false';
+            document.getElementById('edit-u-salary').value = u.salary || '';
+            document.getElementById('edit-u-duty').value = u.duty_time || '';
+            document.getElementById('edit-u-avatar').value = u.avatar_url || '';
+            document.getElementById('edit-u-note').value = u.custom_note || '';
+            openModal('modal-edit-user');
+        }
+
+        async function updateUserData() {
+            const id = document.getElementById('edit-u-id').value;
+            const data = {
+                full_name: document.getElementById('edit-u-name').value.trim(),
+                username: document.getElementById('edit-u-username').value.trim(),
+                password: document.getElementById('edit-u-pass').value,
+                role: document.getElementById('edit-u-role').value,
+                company_id: document.getElementById('edit-u-co').value || null,
+                is_suspended: document.getElementById('edit-u-suspended').value === 'true',
+                salary: document.getElementById('edit-u-salary').value.trim(),
+                duty_time: document.getElementById('edit-u-duty').value.trim(),
+                avatar_url: document.getElementById('edit-u-avatar').value.trim(),
+                custom_note: document.getElementById('edit-u-note').value.trim()
+            };
+            const errEl = document.getElementById('edit-u-err');
+            errEl.classList.add('hidden');
+
+            const { error } = await sb.from('profiles').update(data).eq('id', id);
+            if (error) {
+                errEl.textContent = error.message;
+                errEl.classList.remove('hidden');
+                return;
+            }
+            closeModal('modal-edit-user');
+            await loadUsers(); // Refresh first
+            alert('User info updated successfully!');
+        }
+
+        async function createUser() {
+            const name = document.getElementById('u-name').value.trim();
+            const username = document.getElementById('u-username').value.trim();
+            const pass = document.getElementById('u-pass').value;
+            const role = document.getElementById('u-role').value;
+            const coId = document.getElementById('u-co').value;
+            const errEl = document.getElementById('u-err');
+            errEl.classList.add('hidden');
+            if (!username || !pass) { errEl.textContent = 'Username and password required.'; errEl.classList.remove('hidden'); return }
+            const { error } = await sb.from('profiles').insert({
+                full_name: name, username, password: pass, role, company_id: coId || null
+            });
+            if (error) { errEl.textContent = error.message; errEl.classList.remove('hidden'); return }
+            closeModal('modal-add-user');
+            await loadUsers();
+        }
+
+
+        let selectedThemeId = 'theme-1';
+        function show(name) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            const sec = document.getElementById('section-' + name);
+            if (sec) sec.classList.add('active');
+            const nav = document.getElementById('nav-' + name);
+            if (nav) nav.classList.add('active');
+
+            const titles = { overview: 'System Overview', companies: 'Companies', users: 'All Users', subs: 'Subscription Control', messages: 'Company Messages', profile: 'My Profile', settings: 'System Settings' };
+            document.getElementById('page-title').textContent = titles[name] || name;
+            closeSidebar();
+
+            if (name === 'overview') loadOverview();
+            if (name === 'companies') loadCompanies();
+            if (name === 'users') loadUsers();
+            if (name === 'subs') loadSubsData();
+            if (name === 'messages') loadCompanyMessages();
+            if (name === 'profile') loadMyProfile();
+            if (name === 'settings') renderThemeGrid();
+        }
+
+        /* Company Messages (Super Admin) */
+        async function loadCompanyMessages() {
+            const body = document.getElementById('messages-body');
+            body.innerHTML = '<tr><td colspan="5" class="text-center text-white/20 py-8">Loading…</td></tr>';
+
+            const { data, error } = await sb.from('company_messages')
+                .select('*, companies(name), profiles(full_name)')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                body.innerHTML = `<tr><td colspan="5" class="text-center text-red-400 py-8">Error: ${esc(error.message)}</td></tr>`;
+                return;
+            }
+            if (!data?.length) {
+                body.innerHTML = '<tr><td colspan="5" class="text-center text-white/20 py-8 italic">No messages from company admins yet.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = data.map(m => {
+                const statusCls = m.reply ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10';
+                const statusTxt = m.reply ? '✓ REPLIED' : '⏳ PENDING';
+                const replyHtml = m.reply ? `
+                    <div class="mt-2 p-2 bg-black/20 rounded-lg border border-white/5">
+                        <div class="text-[9px] text-emerald-400 font-bold uppercase mb-0.5">Your Reply:</div>
+                        <div class="text-[11px] text-white/50 italic">${esc(m.reply)}</div>
+                        <div class="text-[9px] text-white/25 mt-1">${new Date(m.replied_at).toLocaleString()}</div>
+                    </div>` : '';
+                return `
+                <tr class="group hover:bg-white/[0.02] transition-colors text-xs">
+                    <td class="px-6 py-4">
+                        <div class="font-bold text-white text-sm">${esc(m.companies?.name || 'Unknown Company')}</div>
+                        <div class="text-[10px] text-white/40 mt-0.5">${esc(m.profiles?.full_name || 'Admin')}</div>
+                    </td>
+                    <td class="px-6 py-4 max-w-xs">
+                        <div class="text-amber-400 font-semibold mb-1">${esc(m.subject)}</div>
+                        <div class="text-white/60 leading-relaxed">${esc(m.body)}</div>
+                        ${replyHtml}
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${statusCls}">${statusTxt}</span>
+                    </td>
+                    <td class="px-6 py-4 text-white/25">
+                        ${new Date(m.created_at).toLocaleString()}
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <div class="flex justify-end gap-2">
+                            <button onclick="replyMessage('${m.id}')" class="action-btn view" title="Reply to message">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                            </button>
+                            <button onclick="deleteMessage('${m.id}')" class="action-btn delete" title="Delete message">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function replyMessage(id) {
+            const reply = prompt('Enter your reply to the admin:');
+            if (reply === null) return; // cancelled
+            if (!reply.trim()) { alert('Reply cannot be empty.'); return; }
+
+            const { error } = await sb.from('company_messages').update({
+                reply: reply.trim(),
+                replied_at: new Date().toISOString(),
+                is_read: true
+            }).eq('id', id);
+
+            if (error) alert('Failed to send reply: ' + error.message);
+            else {
+                alert('✅ Reply sent to company admin!');
+                loadCompanyMessages();
+            }
+        }
+
+        async function deleteMessage(id) {
+            if (!confirm('Permanently delete this message?')) return;
+            const { error } = await sb.from('company_messages').delete().eq('id', id);
+            if (error) alert('Delete failed: ' + error.message);
+            else loadCompanyMessages();
+        }
+
+        /* Subscriptions Logic */
+        let subTab = 'active';
+        function changeSubTab(t) {
+            subTab = t;
+            document.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+            document.getElementById('sub-tab-' + t).classList.add('active');
+            document.querySelectorAll('.sub-page').forEach(p => p.classList.add('hidden'));
+            document.getElementById('sub-' + t).classList.remove('hidden');
+            loadSubsData();
+        }
+
+        async function loadSubsData() {
+            if (subTab === 'active') loadActiveSubs();
+            if (subTab === 'pending') loadPendingPayments();
+            if (subTab === 'methods') loadPaymentMethods();
+            if (subTab === 'history') loadPaymentHistory();
+        }
+
+        async function loadActiveSubs() {
+            const { data } = await sb.from('companies').select('*').order('name');
+            const body = document.getElementById('sub-companies-body');
+            body.innerHTML = (data || []).map(c => {
+                const end = c.subscription_end_date ? new Date(c.subscription_end_date) : null;
+                const daysLeft = end ? Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24)) : '—';
+                const statusColor = daysLeft < 0 ? 'text-red-400' : daysLeft < 7 ? 'text-amber-400' : 'text-emerald-400';
+
+                return `<tr>
+                    <td class="text-white font-medium">${esc(c.name)}</td>
+                    <td class="capitalize">${c.subscription_model || 'monthly'}</td>
+                    <td>${end ? end.toLocaleDateString() : '—'}</td>
+                    <td class="${statusColor} font-bold">${daysLeft}</td>
+                    <td><span class="badge ${daysLeft < 0 ? 'badge-out' : 'badge-in'}">${daysLeft < 0 ? 'Expired' : 'Active'}</span></td>
+                    <td>
+                        <button onclick="openSetSub('${c.id}')" title="Manage Subscription" class="action-btn edit">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function loadPendingPayments() {
+            const { data } = await sb.from('payment_submissions').select('*, companies(name)').eq('status', 'pending').order('created_at');
+            const body = document.getElementById('sub-pending-body');
+            body.innerHTML = (data || []).map(p => `
+                <tr>
+                    <td class="text-white font-medium">${esc(p.companies?.name)}</td>
+                    <td class="text-emerald-400 font-bold">$${p.amount}</td>
+                    <td>
+                        <div class="text-[10px] text-white/40 uppercase">Trx ID:</div>
+                        <div class="text-xs text-white/70">${esc(p.trx_id || '—')}</div>
+                    </td>
+                    <td>
+                        ${p.receipt_url ? `<button onclick="openFullView('${p.receipt_url}')" class="text-violet-400 underline text-xs">View Receipt</button>` : '—'}
+                    </td>
+                    <td class="text-white/40 text-xs">${timeAgo(p.created_at)}</td>
+                    <td>
+                        <div class="flex gap-2">
+                            <button onclick="reviewPayment('${p.id}', 'approved')" title="Approve Payment" class="action-btn view">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            </button>
+                            <button onclick="reviewPayment('${p.id}', 'rejected')" title="Reject Payment" class="action-btn delete">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+            if (!data?.length) body.innerHTML = '<tr><td colspan="6" class="text-center text-white/20 py-8">No pending payments.</td></tr>';
+        }
+
+        async function reviewPayment(id, status) {
+            const remark = prompt(status === 'approved' ? 'Approval note (optional):' : 'Rejection reason (required):');
+            if (status === 'rejected' && !remark) return;
+
+            const { data: p } = await sb.from('payment_submissions').select('*').eq('id', id).single();
+            if (!p) return;
+
+            const updates = { status, remark, approved_at: status === 'approved' ? new Date().toISOString() : null };
+            await sb.from('payment_submissions').update(updates).eq('id', id);
+
+            if (status === 'approved') {
+                // Extend subscription
+                const { data: co } = await sb.from('companies').select('*').eq('id', p.company_id).single();
+                let newEnd = new Date(co.subscription_end_date && new Date(co.subscription_end_date) > new Date() ? co.subscription_end_date : new Date());
+
+                if (co.subscription_model === 'weekly') newEnd.setDate(newEnd.getDate() + 7);
+                else if (co.subscription_model === 'monthly') newEnd.setMonth(newEnd.getMonth() + 1);
+                else if (co.subscription_model === 'yearly') newEnd.setFullYear(newEnd.getFullYear() + 1);
+
+                await sb.from('companies').update({ subscription_end_date: newEnd.toISOString() }).eq('id', p.company_id);
+            }
+
+            alert(`Payment ${status}!`);
+            loadPendingPayments();
+        }
+
+        async function loadPaymentMethods() {
+            const { data } = await sb.from('payment_methods').select('*').order('created_at');
+            const grid = document.getElementById('methods-grid');
+            grid.innerHTML = (data || []).map(m => `
+                <div class="card relative p-5 group flex flex-col justify-between h-full min-h-[140px]">
+                    <button onclick="deleteMethod('${m.id}')" class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all bg-red-400/10 p-1.5 rounded-lg z-10" title="Delete Method">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                    ${m.qr_url ? `<img src="${m.qr_url}" class="absolute top-3 right-12 w-10 h-10 rounded-lg border border-white/10 cursor-zoom-in hover:scale-110 transition-transform object-cover z-10 bg-white/5" onclick="openFullView('${m.qr_url}')" title="View QR">` : ''}
+                    <div>
+                        <div class="text-amber-400 font-bold mb-3 pr-20 break-words leading-tight mt-1 text-base p-1">${esc(m.name)}</div>
+                        <div class="flex items-start gap-3 bg-black/20 p-3 rounded-lg border border-white/5 mt-auto">
+                            <div class="text-white/80 text-sm font-mono flex-1 break-all select-all leading-relaxed">${esc(m.account_info || '—')}</div>
+                            <button onclick="navigator.clipboard.writeText('${esc(m.account_info)}').then(()=>alert('Copied to clipboard!'))" class="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/50 hover:text-white transition-colors flex-shrink-0" title="Copy Address">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    ${m.note ? `<div class="text-white/40 text-xs mt-3 italic pb-1 px-1 break-words">${esc(m.note)}</div>` : ''}
+                </div>
+            `).join('');
+            if (!data?.length) grid.innerHTML = '<div class="col-span-full text-center text-white/20 py-8 italic border border-dashed border-white/10 rounded-2xl">No payment methods added.</div>';
+        }
+
+        function openAddMethod() { openModal('modal-add-method'); }
+        async function saveMethod() {
+            const name = document.getElementById('meth-name').value.trim();
+            const info = document.getElementById('meth-info').value.trim();
+            const note = document.getElementById('meth-note').value.trim();
+            const qr = document.getElementById('meth-qr').value;
+            if (!name) return alert('Name required');
+
+            await sb.from('payment_methods').insert({ name, account_info: info, note, qr_url: qr });
+            closeModal('modal-add-method');
+            loadPaymentMethods();
+        }
+
+        async function deleteMethod(id) {
+            if (confirm('Delete this payment method?')) {
+                await sb.from('payment_methods').delete().eq('id', id);
+                loadPaymentMethods();
+            }
+        }
+
+        async function openSetSub(id) {
+            const { data: c } = await sb.from('companies').select('*').eq('id', id).single();
+            if (!c) return;
+            document.getElementById('set-sub-id').value = c.id;
+            document.getElementById('set-sub-model').value = c.subscription_model || 'monthly';
+            document.getElementById('set-sub-date').value = c.subscription_end_date ? c.subscription_end_date.split('T')[0] : '';
+            document.getElementById('set-sub-amount').value = c.subscription_amount || 0;
+            document.getElementById('set-sub-grace').value = c.grace_period_days || 3;
+            openModal('modal-manage-sub');
+        }
+
+        async function saveSubSettings() {
+            const id = document.getElementById('set-sub-id').value;
+            const updates = {
+                subscription_model: document.getElementById('set-sub-model').value,
+                subscription_end_date: document.getElementById('set-sub-date').value ? new Date(document.getElementById('set-sub-date').value).toISOString() : null,
+                subscription_amount: parseFloat(document.getElementById('set-sub-amount').value) || 0,
+                grace_period_days: parseInt(document.getElementById('set-sub-grace').value) || 3
+            };
+            await sb.from('companies').update(updates).eq('id', id);
+            closeModal('modal-manage-sub');
+            loadActiveSubs();
+        }
+
+        function renderThemeGrid() {
+            const grid = document.getElementById('theme-grid');
+            const currentId = myProfile.theme_id || 'theme-1';
+            grid.innerHTML = themes.map(t => `
+                <div onclick="previewTheme('${t.id}')" class="group cursor-pointer space-y-2">
+                    <div class="w-full aspect-square rounded-xl border-2 transition-all overflow-hidden relative ${t.id === selectedThemeId ? 'border-amber-500 scale-105 shadow-lg' : 'border-white/5 hover:border-white/20'}" style="background:${t.bg}">
+                        <div class="absolute inset-0 opacity-40" style="background:${t.gradient}"></div>
+                        <div class="absolute bottom-2 right-2 w-3 h-3 rounded-full" style="background:${t.accent}"></div>
+                        <div class="absolute top-2 left-2 w-5 h-1 rounded-full" style="background:${t.primary}"></div>
+                    </div>
+                    <div class="text-[10px] text-center font-bold tracking-tighter uppercase ${t.id === selectedThemeId ? 'text-amber-400' : 'text-white/40 group-hover:text-white/60'}">${t.name}</div>
+                </div>
+            `).join('');
+        }
+
+        function previewTheme(id) {
+            selectedThemeId = id;
+            const theme = themes.find(t => t.id === id);
+            applyTheme(theme);
+            renderThemeGrid();
+        }
+
+        async function loadMyProfile() {
+            const n = myProfile.full_name || myProfile.username;
+            document.getElementById('my-profile-name').textContent = n;
+            const av = document.getElementById('my-profile-avatar');
+            if (myProfile.avatar_url) av.innerHTML = `<img src="${myProfile.avatar_url}" class="w-full h-full object-cover">`;
+            else av.textContent = initials(n);
+            document.getElementById('my-set-name').value = myProfile.full_name || '';
+        }
+
+        async function updateMyProfile() {
+            const btn = document.getElementById('save-profile-btn');
+            const msg = document.getElementById('profile-msg');
+            const name = document.getElementById('my-set-name').value.trim();
+            const oldPass = document.getElementById('my-old-pass').value;
+            const newPass = document.getElementById('my-new-pass').value;
+            const avatar = document.getElementById('my-new-avatar').value;
+
+            if (newPass && !oldPass) return alert('Enter current password to change password');
+            if (oldPass && oldPass !== myProfile.password) return alert('Incorrect current password');
+
+            btn.disabled = true; btn.textContent = 'Saving...';
+            const updates = { full_name: name, avatar_url: avatar };
+            if (newPass) updates.password = newPass;
+
+            const { data, error } = await sb.from('profiles').update(updates).eq('id', myProfile.id).select().single();
+            if (error) {
+                msg.textContent = '❌ ' + error.message;
+                msg.className = 'text-center text-sm py-2 px-4 rounded-xl bg-red-500/10 text-red-400 mt-4';
+            } else {
+                myProfile = data;
+                localStorage.setItem('office_hub_user', JSON.stringify(data));
+                msg.textContent = '✅ Profile updated!';
+                msg.className = 'text-center text-sm py-2 px-4 rounded-xl bg-amber-500/10 text-amber-400 mt-4';
+                setTimeout(() => msg.classList.add('hidden'), 3000);
+            }
+            msg.classList.remove('hidden');
+            btn.disabled = false; btn.textContent = 'Save Profile Changes';
+        }
+
+        async function saveTheme() {
+            const btn = document.querySelector('button[onclick="saveTheme()"]');
+            const msg = document.getElementById('theme-msg');
+            btn.disabled = true; btn.textContent = 'Saving...';
+
+            const { data, error } = await sb.from('profiles').update({ theme_id: selectedThemeId }).eq('id', myProfile.id).select().single();
+            if (error) {
+                msg.textContent = '❌ Failed to save theme: ' + error.message;
+            } else {
+                myProfile.theme_id = selectedThemeId;
+                localStorage.setItem('office_hub_user', JSON.stringify(myProfile));
+                msg.textContent = '✅ Theme saved successfully!';
+
+                // Trigger real-time refresh to sync theme across other tabs
+                await sb.from('profiles').update({ updated_at: new Date().toISOString() }).eq('id', myProfile.id);
+            }
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 3000);
+            btn.disabled = false; btn.textContent = 'Save Theme Preference';
+        }
+
+        function applyTheme(theme) {
+
+            document.documentElement.style.setProperty('--primary', theme.primary);
+            document.documentElement.style.setProperty('--accent', theme.accent);
+            document.documentElement.style.setProperty('--bg', theme.bg);
+            document.getElementById('dynamic-theme')?.remove();
+            document.getElementById('early-theme')?.remove();
+            const style = document.createElement('style');
+            style.id = 'dynamic-theme';
+            const isLight = theme.light === true;
+            style.innerHTML = `
+                body { background: ${theme.gradient || `linear-gradient(135deg, ${theme.bg} 0%, rgba(0,0,0,0.8) 100%)`} fixed !important; color: ${isLight ? '#1e293b' : '#e2e8f0'} !important; }
+                .orb-1 { background: ${theme.primary}; }
+                .orb-2 { background: ${theme.accent}; }
+                .orb-3 { background: ${isLight ? theme.primary : '#ffffff'}; opacity: ${isLight ? '0.2' : '0.05'}; }
+                #sidebar { background: ${isLight ? 'rgba(255,255,255,0.7)' : theme.bg + 'cc'} !important; border-right: 1px solid ${isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'} !important; backdrop-filter: blur(12px); }
+                #topbar { background: ${isLight ? 'rgba(255,255,255,0.8)' : theme.bg + 'e6'} !important; }
+                .card, td { background: ${isLight ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.04)'} !important; border-color: ${isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.07)'} !important; }
+                .input, select { background: ${isLight ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.05)'} !important; color: ${isLight ? '#000' : '#fff'} !important; border-color: ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'} !important; }
+                .text-white { color: ${isLight ? '#0f172a' : '#fff'} !important; }
+                ${isLight ? `
+                .text-white\\/70 { color: rgba(15, 23, 42, 0.7) !important; }
+                .text-white\\/60 { color: rgba(15, 23, 42, 0.6) !important; }
+                .text-white\\/40 { color: rgba(15, 23, 42, 0.4) !important; }
+                .text-white\\/35 { color: rgba(15, 23, 42, 0.35) !important; }
+                .text-white\\/25 { color: rgba(15, 23, 42, 0.25) !important; }
+                .text-white\\/20 { color: rgba(15, 23, 42, 0.2) !important; }
+                .text-white\\/10 { color: rgba(15, 23, 42, 0.1) !important; }
+                .text-amber-400\\/70 { color: #b45309 !important; }
+                th { color: rgba(15, 23, 42, 0.5) !important; }
+                .nav-item { color: #334155 !important; }
+                .nav-item:hover { background: rgba(0,0,0,0.04) !important; }
+                ` : ''}
+                .nav-item.active { background: ${theme.primary}22 !important; color: ${theme.primary} !important; }
+            `;
+            document.head.appendChild(style);
+        }
+
+        async function init() {
+            try {
+                const userStr = localStorage.getItem('office_hub_user');
+                if (!userStr) { window.location.href = 'index.html'; return }
+                const localUser = JSON.parse(userStr);
+
+                const { data: profile, error: pErr } = await sb.from('profiles').select('*').eq('id', localUser.id).single();
+                if (pErr || !profile || profile.role !== 'super_admin') {
+                    console.error('init auth error:', pErr);
+                    window.location.href = profile?.role === 'admin' ? 'admin.html' : 'staff.html';
+                    return;
+                }
+                myProfile = profile;
+                selectedThemeId = profile.theme_id || 'theme-1';
+                const theme = themes.find(t => t.id === selectedThemeId) || themes[0];
+                applyTheme(theme);
+
+                localStorage.setItem('office_hub_user', JSON.stringify(profile));
+                const n = profile.full_name || profile.username;
+                document.getElementById('sb-name').textContent = n;
+                const sbAv = document.getElementById('sb-avatar');
+                if (profile.avatar_url) sbAv.innerHTML = `<img src="${profile.avatar_url}" class="w-full h-full rounded-full object-cover">`;
+                else sbAv.textContent = initials(n);
+
+                await loadOverview();
+
+                // Global real-time refresh (Refresh everything if any profile changes)
+                sb.channel('sa-profiles-refresh')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+                        loadUsers();
+                        loadOverview();
+                    })
+                    .subscribe();
+
+                // Real-time security & session check
+                sb.channel('sa-security')
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${myProfile.id}` }, payload => {
+                        // Suspension check
+                        if (String(payload.new.is_suspended) === 'true') {
+                            alert('Your account has been suspended. You will be logged out.');
+                            logout();
+                            return;
+                        }
+                        // Single Device Check
+                        const localSid = myProfile.session_id;
+                        if (payload.new.session_id && localSid && payload.new.session_id !== localSid) {
+                            alert('You have been logged out because your account was logged in on another device.');
+                            logout();
+                        }
+                    })
+                    .subscribe();
+
+                setInterval(() => { document.getElementById('topbar-time').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, 1000);
+            } catch (err) {
+                console.error('INIT FATAL:', err);
+                alert('System initialization failed. Please check your connection or login again.');
+            }
+        }
+        async function logout() {
+            localStorage.removeItem('office_hub_user');
+            window.location.href = 'index.html';
+        }
+        init();
+    </script>
+</body>
+
+</html>
