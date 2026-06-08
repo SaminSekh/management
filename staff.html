@@ -1,0 +1,3215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Management — Staff</title>
+    <meta name="description" content="Staff dashboard for clock-in, social wall, and notifications." />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#6c63ff" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MgmtHub" />
+    <script>
+        (function () {
+            const user = JSON.parse(localStorage.getItem('office_hub_user') || '{}');
+            const theme = user.companies?.theme_id || 'theme-1';
+            const colors = {
+                'theme-1': { primary: '#6c63ff', accent: '#2dd4bf', bg: '#0d0d1a' },
+                'theme-2': { primary: '#38bdf8', accent: '#818cf8', bg: '#020617' },
+                'theme-3': { primary: '#34d399', accent: '#059669', bg: '#064e3b' },
+                'theme-4': { primary: '#f87171', accent: '#b91d1d', bg: '#450a0a' },
+                'theme-5': { primary: '#0ea5e9', accent: '#2dd4bf', bg: '#0c4a6e' },
+                'theme-6': { primary: '#f43f5e', accent: '#fb923c', bg: '#500724' },
+                'theme-7': { primary: '#a855f7', accent: '#ec4899', bg: '#4c0519' },
+                'theme-8': { primary: '#00ffcc', accent: '#ff00ff', bg: '#1a1a2e' },
+                'theme-9': { primary: '#4ade80', accent: '#15803d', bg: '#052e16' },
+                'theme-10': { primary: '#94a3b8', accent: '#3b82f6', bg: '#0f172a' }
+            };
+            const c = colors[theme] || colors['theme-1'];
+            document.documentElement.style.setProperty('--primary', c.primary);
+            document.documentElement.style.setProperty('--accent', c.accent);
+            document.documentElement.style.setProperty('--bg', c.bg);
+            document.write('<style id="early-theme">body{background:' + c.bg + '!important;}</style>');
+        })();
+    </script>
+    <style>
+        :root {
+            --primary: #6c63ff;
+            --accent: #2dd4bf;
+            --bg: #0d0d1a;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0d0d1a;
+            color: #e2e8f0;
+            margin: 0;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 260px;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #12122a 0%, #0d0d1a 100%);
+            border-right: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            z-index: 40;
+            transition: transform 0.3s cubic-bezier(.4, 0, .2, 1);
+        }
+
+        #sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+
+        #main {
+            margin-left: 260px;
+            transition: margin-left 0.3s cubic-bezier(.4, 0, .2, 1);
+            min-height: 100vh;
+        }
+
+        #main.full {
+            margin-left: 0;
+        }
+
+        @media (max-width: 768px) {
+            #sidebar {
+                transform: translateX(-260px);
+            }
+
+            #sidebar.open {
+                transform: translateX(0);
+            }
+
+            #main {
+                margin-left: 0;
+            }
+
+            #overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.6);
+                z-index: 35;
+                display: none;
+            }
+
+            #overlay.show {
+                display: block;
+            }
+        }
+
+        /* ── Mobile overflow fix ── */
+        html, body { overflow-x: hidden; max-width: 100%; }
+
+        @media (max-width: 768px) {
+            #top-bar { overflow: hidden; }
+            #current-time { display: none !important; }
+            #page-title {
+                font-size: 15px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                min-width: 0;
+            }
+            #top-bar .ml-auto { flex-shrink: 0; }
+            .card, .stat-card { overflow: hidden; }
+            .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 20px;
+            border-radius: 12px;
+            margin: 2px 10px;
+            color: rgba(255, 255, 255, 0.55);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .nav-item:hover {
+            background: rgba(108, 99, 255, 0.12);
+            color: #fff;
+        }
+
+        .nav-item.active {
+            background: linear-gradient(135deg, rgba(108, 99, 255, 0.25), rgba(79, 70, 229, 0.15));
+            color: #a5b4fc;
+        }
+
+        .nav-item svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 20px;
+            padding: 24px;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        /* Clock widget */
+        .clock-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px 28px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            gap: 8px;
+        }
+
+        .clock-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-in {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
+        }
+
+        .btn-in:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 28px rgba(16, 185, 129, 0.45);
+        }
+
+        .btn-brk {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.35);
+        }
+
+        .btn-brk:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 28px rgba(245, 158, 11, 0.45);
+        }
+
+        .btn-out {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.35);
+        }
+
+        .btn-out:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 28px rgba(239, 68, 68, 0.45);
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0) scale(1);
+            }
+
+            50% {
+                transform: translateY(-30px) scale(1.05);
+            }
+        }
+
+        .orb-bg {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: -1;
+            display: none;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.25;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            width: 600px;
+            height: 600px;
+            background: var(--primary);
+            top: -200px;
+            left: -200px;
+        }
+
+        .orb-2 {
+            width: 500px;
+            height: 500px;
+            background: var(--accent);
+            bottom: -150px;
+            right: -150px;
+            animation-delay: -4s;
+        }
+
+        .orb-3 {
+            width: 400px;
+            height: 400px;
+            background: #f472b6;
+            top: 40%;
+            left: 30%;
+            animation-delay: -2s;
+            opacity: 0.15;
+        }
+
+        .with-orbs .orb-bg {
+            display: block;
+        }
+
+        .with-orbs #sidebar,
+        .with-orbs .card,
+        .with-orbs .stat-card {
+            backdrop-filter: blur(16px);
+        }
+
+        .btn-primary,
+        .clock-btn.btn-in,
+        .btn-post {
+            background: linear-gradient(135deg, var(--primary), #4f46e5) !important;
+            box-shadow: 0 4px 15px var(--primary)44 !important;
+        }
+
+        .nav-item.active {
+            background: var(--primary)1a !important;
+            color: var(--primary) !important;
+        }
+
+        .text-violet-400 {
+            color: var(--primary) !important;
+        }
+
+        .text-violet-300 {
+            color: var(--primary) !important;
+            opacity: 0.8;
+        }
+
+        .bg-violet-500\/10 {
+            background: var(--primary)1a !important;
+        }
+
+        #timer-display {
+            font-size: 3rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #6c63ff, #2dd4bf);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-in {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-break {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .badge-out {
+            background: rgba(100, 116, 139, 0.15);
+            color: #94a3b8;
+            border: 1px solid rgba(100, 116, 139, 0.3);
+        }
+
+        /* Social Wall */
+        .post-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 18px;
+            padding: 20px;
+            transition: border-color 0.2s;
+        }
+
+        .post-card:hover {
+            border-color: rgba(108, 99, 255, 0.25);
+        }
+
+        .like-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #94a3b8;
+        }
+
+        .like-btn:hover,
+        .like-btn.liked {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.35);
+            color: #f87171;
+        }
+
+        .comment-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 10px 14px;
+            color: #fff;
+            font-size: 13px;
+            width: 100%;
+            transition: border-color 0.2s;
+        }
+
+        .comment-input:focus {
+            outline: none;
+            border-color: #6c63ff;
+        }
+
+        .comment-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .post-image {
+            width: 100%;
+            max-height: 400px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin-top: 12px;
+        }
+
+        /* Composer */
+        .composer-area {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            padding: 14px;
+            color: #fff;
+            font-size: 14px;
+            width: 100%;
+            resize: none;
+            transition: border-color 0.2s;
+            min-height: 80px;
+        }
+
+        .composer-area:focus {
+            outline: none;
+            border-color: #6c63ff;
+        }
+
+        .composer-area::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-post {
+            background: linear-gradient(135deg, #6c63ff, #4f46e5);
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-post:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(108, 99, 255, 0.4);
+        }
+
+        .btn-post:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Notification badge */
+        .notif-badge {
+            background: #ef4444;
+            color: #fff;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Topbar notification bell */
+        .topbar-notif-btn {
+            position: relative;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: none;
+            outline: none;
+        }
+        .topbar-notif-btn:hover, .topbar-notif-btn.open { background: rgba(255,255,255,0.12); }
+        .topbar-notif-count {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #ef4444;
+            color: #fff;
+            border-radius: 50%;
+            min-width: 18px;
+            height: 18px;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 3px;
+            border: 2px solid #0d0d1a;
+            line-height: 1;
+            animation: notif-pop 0.3s ease;
+        }
+        @keyframes notif-pop {
+            0% { transform: scale(0); }
+            70% { transform: scale(1.25); }
+            100% { transform: scale(1); }
+        }
+
+        /* Bell dropdown panel */
+        .bell-dropdown {
+            position: absolute;
+            top: calc(100% + 10px);
+            right: 0;
+            width: 240px;
+            background: #13131f;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            padding: 10px;
+            z-index: 200;
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            animation: dropdown-in 0.18s ease;
+        }
+        .bell-dropdown.open { display: flex; }
+        @keyframes dropdown-in {
+            from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .bell-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border: 1px solid transparent;
+        }
+        .bell-dropdown-item:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.06); }
+        .bell-dropdown-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .bell-dropdown-label { flex: 1; }
+        .bell-dropdown-label span { display: block; font-size: 13px; font-weight: 600; color: #fff; }
+        .bell-dropdown-label small { font-size: 11px; color: rgba(255,255,255,0.4); }
+        .bell-dropdown-badge {
+            background: #ef4444;
+            color: #fff;
+            border-radius: 20px;
+            min-width: 20px;
+            height: 20px;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 5px;
+        }
+        .bell-dropdown-badge.zero { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.3); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: linear-gradient(135deg, #6c63ff, #2dd4bf);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #fff;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        /* History table */
+        .hist-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 6px;
+        }
+
+        .hist-table td {
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.04);
+            font-size: 13px;
+        }
+
+        .hist-table td:first-child {
+            border-radius: 10px 0 0 10px;
+        }
+
+        .hist-table td:last-child {
+            border-radius: 0 10px 10px 0;
+        }
+
+        select,
+        .input,
+        input[type=text],
+        input[type=email],
+        input[type=password] {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 14px;
+            width: 100%;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Override Browser Autofill Styles */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 1000px #1a1a2e inset !important;
+            -webkit-text-fill-color: #fff !important;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+
+        select:focus,
+        .input:focus,
+        input:focus {
+            outline: none;
+            border-color: #6c63ff;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.15);
+        }
+
+        select option {
+            background: #1e1e3a;
+        }
+
+        .modal-bg {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-bg.show {
+            display: flex
+        }
+
+        .modal {
+            background: #1a1a2e;
+            border-radius: 24px;
+            padding: 24px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .camera-view {
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #camera-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease both;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: .5;
+                transform: scale(0.85);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Mobile Overlay -->
+    <div id="overlay" onclick="closeSidebar()"></div>
+
+    <div class="orb-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar">
+
+        <!-- User Info -->
+        <div class="px-4 py-4 border-b border-white/5">
+            <div class="flex items-center gap-3">
+                <div id="sidebar-avatar" class="avatar text-sm cursor-pointer" onclick="if(myProfile && myProfile.avatar_url) openFullView(myProfile.avatar_url)">—</div>
+                <div class="overflow-hidden">
+                    <div id="sidebar-name" class="text-white font-semibold text-sm truncate">Loading…</div>
+                    <div id="sidebar-company" class="text-white/40 text-xs truncate">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nav -->
+        <nav class="flex-1 py-4 overflow-y-auto">
+            <div class="px-3 mb-2 text-white/25 text-xs font-semibold uppercase tracking-widest px-4">Workspace</div>
+            <div class="nav-item active" onclick="showSection('clock')" id="nav-clock">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Clock In/Out
+            </div>
+            <div class="nav-item" onclick="showSection('wall')" id="nav-wall">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                </svg>
+                Social Wall
+                <span id="wall-badge" class="hidden notif-badge ml-auto">0</span>
+            </div>
+            <div class="nav-item" onclick="showSection('notifs')" id="nav-notifs">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                Notifications
+                <span id="notif-badge" class="hidden notif-badge ml-auto">0</span>
+            </div>
+            <div class="nav-item" onclick="showSection('history')" id="nav-history">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                My History
+            </div>
+            <div class="nav-item" onclick="showSection('profile')" id="nav-profile">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                My Profile
+            </div>
+        </nav>
+
+        <!-- Install App -->
+        <div class="px-3 pb-2" id="pwa-install-wrap" style="display:none">
+            <button id="pwa-install-btn" onclick="installPWA()"
+                class="nav-item w-full"
+                style="background:linear-gradient(135deg,rgba(108,99,255,0.18),rgba(45,212,191,0.1));border:1px solid rgba(108,99,255,0.25);color:#a5b4fc;">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;flex-shrink:0">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Install App
+            </button>
+        </div>
+
+        <!-- Logout -->
+        <div class="p-4 border-t border-white/5">
+            <button onclick="logout()" class="nav-item w-full text-red-400 hover:bg-red-500/10 hover:text-red-300">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Sign Out
+            </button>
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main id="main">
+
+        <!-- Top Bar -->
+        <div id="top-bar"
+            class="sticky top-0 z-30 bg-[#0d0d1a]/90 backdrop-blur border-b border-white/5 px-4 sm:px-6 py-3 flex items-center gap-4">
+            <button id="menu-btn" onclick="toggleSidebar()"
+                class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-all md:hidden">
+                <svg class="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+            <h1 id="page-title" class="text-white font-semibold text-base sm:text-lg">Clock In / Out</h1>
+            <div class="ml-auto flex items-center gap-3">
+                <div id="current-time" class="text-white/50 text-sm hidden sm:block"></div>
+                <div style="position:relative">
+                    <button class="topbar-notif-btn" id="bell-btn" onclick="toggleBellDropdown(event)" title="Activity">
+                        <svg class="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <span id="topbar-notif-count" style="display:none" class="topbar-notif-count">0</span>
+                    </button>
+                    <div class="bell-dropdown" id="bell-dropdown">
+                        <div class="bell-dropdown-item" onclick="closeBellDropdown();showSection('notifs')">
+                            <div class="bell-dropdown-icon" style="background:rgba(109,99,255,0.15)">
+                                <svg class="w-4 h-4" style="color:#a78bfa" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                                </svg>
+                            </div>
+                            <div class="bell-dropdown-label">
+                                <span>Notifications</span>
+                                <small>From admin</small>
+                            </div>
+                            <span id="bell-notif-badge" class="bell-dropdown-badge zero">0</span>
+                        </div>
+                        <div class="bell-dropdown-item" onclick="closeBellDropdown();showSection('wall')">
+                            <div class="bell-dropdown-icon" style="background:rgba(16,185,129,0.12)">
+                                <svg class="w-4 h-4" style="color:#34d399" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 12h6m-6-4h2"/>
+                                </svg>
+                            </div>
+                            <div class="bell-dropdown-label">
+                                <span>Social Wall</span>
+                                <small>New posts</small>
+                            </div>
+                            <span id="bell-wall-badge" class="bell-dropdown-badge zero">0</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="top-status" class="status-badge badge-out">
+                    <span class="pulse-dot" style="background:#94a3b8"></span>
+                    <span>Not Clocked In</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto space-y-6">
+
+            <!-- Verification Required Banner -->
+            <div id="verification-banner" class="hidden">
+                <div class="rounded-2xl p-5 border" style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(239,68,68,0.05));border-color:rgba(245,158,11,0.3)">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(245,158,11,0.15)">
+                            <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-amber-300 font-semibold text-sm">Verification Required</h3>
+                            <p class="text-white/50 text-xs mt-1 leading-relaxed">Your admin requires you to complete verification before you can use clock in/out, social wall, and other features. Please submit all documents below:</p>
+                            <ul class="text-white/40 text-xs mt-2 space-y-1 list-disc list-inside">
+                                <li>Video Selfie</li>
+                                <li>Normal Selfie</li>
+                                <li>NID Card (Front & Back)</li>
+                                <li>Email Address</li>
+                                <li>Wallet Type & Payment Address</li>
+                                <li>Payment QR Code</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ CLOCK SECTION ═══ -->
+            <div id="section-clock" class="section active fade-in space-y-6">
+
+                <!-- Timer Card -->
+                <div class="card text-center space-y-4">
+                    <div class="text-white/50 text-sm font-medium">Current Session Timer</div>
+                    <div id="timer-display">00:00:00</div>
+                    <div id="session-label" class="text-white/40 text-sm">—</div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="card space-y-4">
+                    <div class="text-white font-semibold mb-2">Attendance Actions</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <button id="btn-check-in" class="clock-btn btn-in" onclick="clockAction('in')">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                            </svg>
+                            Check In
+                        </button>
+                        <button id="btn-break" class="clock-btn btn-brk" onclick="clockAction('break')" disabled>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Take Break
+                        </button>
+                        <button id="btn-check-out" class="clock-btn btn-out" onclick="clockAction('out')" disabled>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                            Check Out
+                        </button>
+                    </div>
+                    <div id="clock-msg" class="hidden text-sm rounded-xl px-4 py-3"></div>
+                </div>
+
+                <!-- Today's Summary -->
+                <div class="grid grid-cols-1 gap-6">
+                    <div class="card bg-violet-500/5">
+                        <div class="text-white font-semibold mb-3">Today's Summary</div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <div class="text-white/40 text-xs mb-1">Work Time</div>
+                                <div id="total-work" class="text-xl font-bold text-emerald-400">0h 0m</div>
+                            </div>
+                            <div>
+                                <div class="text-white/40 text-xs mb-1">Break Time</div>
+                                <div id="total-break" class="text-xl font-bold text-amber-400">0h 0m</div>
+                            </div>
+                            <div>
+                                <div class="text-white/40 text-xs mb-1">Break Count</div>
+                                <div id="total-break-count" class="text-xl font-bold text-violet-400">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ SOCIAL WALL ═══ -->
+            <div id="section-wall" class="section fade-in space-y-6">
+                <!-- Composer -->
+                <div class="card space-y-4">
+                    <div class="flex items-start gap-3">
+                        <div id="composer-avatar" class="avatar text-sm">—</div>
+                        <textarea id="post-content" class="composer-area flex-1"
+                            placeholder="What's on your mind? Share with the team…"></textarea>
+                    </div>
+                    <div class="flex items-center justify-between flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <label for="post-image"
+                                class="flex items-center gap-2 cursor-pointer text-sm text-white/50 hover:text-white/80 transition-colors bg-white/5 px-3 py-2 border border-white/10"
+                                style="border-radius:10px">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                Photo
+                            </label>
+                            <input id="post-image" type="file" accept="image/*" class="hidden"
+                                onchange="previewImage(this)" />
+                            <span id="image-name" class="text-xs text-white/40 hidden"></span>
+                        </div>
+                        <button id="post-btn" onclick="submitPost()" class="btn-post">Post Update</button>
+                    </div>
+                    <div id="image-preview-wrap" class="hidden">
+                        <img id="image-preview" class="rounded-12 max-h-48 w-full object-cover"
+                            style="border-radius:12px" />
+                        <button onclick="clearImagePreview()" class="text-xs text-red-400 mt-1 hover:text-red-300">✕
+                            Remove image</button>
+                    </div>
+                </div>
+                <!-- Filter Bar -->
+                <div class="flex items-center justify-between gap-4 p-4 card mb-4">
+                    <div class="text-white font-medium text-sm flex items-center gap-2">
+                        <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        Filter Feed
+                    </div>
+                    <div class="flex items-center gap-2">
+                            <select id="wall-filter" class="input py-1.5 text-xs w-auto bg-white/5 border-white/10"
+                            onchange="loadPosts()">
+                            <option value="today">Today</option>
+                            <option value="week" selected>This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
+                        <div id="wall-custom-dates" class="hidden flex items-center gap-2">
+                            <input type="date" id="wall-start"
+                                class="input py-1.5 text-xs w-28 bg-white/5 border-white/10" onchange="loadPosts()" />
+                            <span class="text-white/30 text-xs">-</span>
+                            <input type="date" id="wall-end"
+                                class="input py-1.5 text-xs w-28 bg-white/5 border-white/10" onchange="loadPosts()" />
+                        </div>
+                    </div>
+                </div>
+                <!-- Feed -->
+                <div id="posts-feed" class="space-y-5">
+                    <div class="text-center text-white/40 py-8">Loading posts…</div>
+                </div>
+            </div>
+
+            <!-- ═══ NOTIFICATIONS ═══ -->
+            <div id="section-notifs" class="section fade-in space-y-4">
+                <!-- Filter Bar -->
+                <div class="flex items-center justify-between gap-4 p-4 card mb-4">
+                    <div class="text-white font-medium text-sm flex items-center gap-2">
+                        <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        Filter Notifications
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="notif-filter" class="input py-1.5 text-xs w-auto bg-white/5 border-white/10"
+                            onchange="loadNotifications()">
+                            <option value="today">Today</option>
+                            <option value="week" selected>This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
+                        <div id="notif-custom-dates" class="hidden flex items-center gap-2">
+                            <input type="date" id="notif-start"
+                                class="input py-1.5 text-xs w-28 bg-white/5 border-white/10"
+                                onchange="loadNotifications()" />
+                            <span class="text-white/30 text-xs">-</span>
+                            <input type="date" id="notif-end"
+                                class="input py-1.5 text-xs w-28 bg-white/5 border-white/10"
+                                onchange="loadNotifications()" />
+                        </div>
+                    </div>
+                </div>
+                <div id="notifs-list" class="space-y-4">
+                    <div class="text-center text-white/40 py-8">Loading notifications…</div>
+                </div>
+            </div>
+
+            <!-- ═══ HISTORY ═══ -->
+            <div id="section-history" class="section fade-in">
+                <div class="flex items-center justify-between gap-4 p-4 card mb-4">
+                    <div class="text-white font-semibold">My Attendance History</div>
+                    <div class="flex items-center gap-2">
+                        <select id="hist-filter" class="input py-1.5 text-xs w-auto bg-white/5 border-white/10"
+                            onchange="loadHistory()">
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="custom">Custom Range</option>
+                            <option value="all">Lifetime</option>
+                        </select>
+                        <div id="hist-custom-dates" class="hidden flex items-center gap-2">
+                            <input type="date" id="hist-start"
+                                class="input py-1.5 text-xs w-28 bg-white/5 border-white/10" onchange="loadHistory()" />
+                            <span class="text-white/30 text-xs">-</span>
+                            <input type="date" id="hist-end"
+                                class="input py-1.5 text-xs w-28 bg-white/5 border-white/10" onchange="loadHistory()" />
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="overflow-x-auto">
+                        <table class="hist-table">
+                            <thead>
+                                <tr class="text-white/40 text-xs uppercase tracking-wider">
+                                    <td class="pb-2 pl-2">Action</td>
+                                    <td class="pb-2">Date & Time</td>
+                                </tr>
+                            </thead>
+                            <tbody id="history-body">
+                                <tr>
+                                    <td colspan="2" class="text-center text-white/40 py-4">Loading…</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ PROFILE SECTION ═══ -->
+            <div id="section-profile" class="section fade-in">
+                <div class="max-w-lg mx-auto space-y-4">
+
+                    <!-- Profile Header Card -->
+                    <div class="card"
+                        style="background:linear-gradient(135deg,#1a1a3e,#0f1729);border-color:rgba(108,99,255,0.3);padding:28px">
+                        <div class="flex items-center gap-5">
+                            <div class="relative flex-shrink-0">
+                                <div id="profile-pic-display"
+                                    class="w-20 h-20 rounded-2xl overflow-hidden flex items-center justify-center cursor-pointer"
+                                    style="background:linear-gradient(135deg,#6c63ff,#2dd4bf);box-shadow:0 8px 24px rgba(108,99,255,0.4)"
+                                    onclick="if(myProfile && myProfile.avatar_url) openFullView(myProfile.avatar_url)">
+                                    <span class="text-2xl font-bold text-white" id="profile-initials">?</span>
+                                </div>
+                                <button onclick="openProfilePicActions()"
+                                    class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full border-2 flex items-center justify-center"
+                                    style="background:#6c63ff;border-color:#0f1729" title="Change Photo">
+                                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h2 id="profile-full-name" class="text-white font-bold text-xl truncate">Loading…</h2>
+                                <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                    <span id="profile-role"
+                                        class="text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+                                        style="background:rgba(108,99,255,0.2);color:#a5b4fc;border:1px solid rgba(108,99,255,0.3)">Role</span>
+                                    <span id="profile-company-tag" class="text-white/30 text-xs"></span>
+                                </div>
+                                <p class="text-white/30 text-xs mt-2">Tap the avatar to change your photo</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Edit Name Card -->
+                    <div class="card" style="padding:24px">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-8 h-8 rounded-xl flex items-center justify-center"
+                                style="background:rgba(108,99,255,0.15)">
+                                <svg class="w-4 h-4" style="color:#a5b4fc" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                            </div>
+                            <span class="text-white font-semibold">Personal Info</span>
+                        </div>
+                        <label class="text-white/40 text-xs mb-2 block uppercase tracking-wider">Full Name</label>
+                        <input id="profile-name-input" type="text" class="input" placeholder="Your full name" />
+                        <div id="profile-name-msg" class="hidden text-sm rounded-xl px-4 py-3 mt-3"></div>
+                        <button onclick="saveName()" id="profile-name-btn" class="clock-btn btn-in w-full mt-4"
+                            style="border-radius:14px">
+                            Save Name
+                        </button>
+                    </div>
+
+                    <!-- Change Password Card -->
+                    <div class="card" style="padding:24px">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-8 h-8 rounded-xl flex items-center justify-center"
+                                style="background:rgba(245,158,11,0.12)">
+                                <svg class="w-4 h-4" style="color:#fbbf24" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                            </div>
+                            <span class="text-white font-semibold">Change Password</span>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label
+                                    class="text-white/40 text-[10px] mb-1.5 block uppercase tracking-[0.15em] font-bold">Current
+                                    Password</label>
+                                <div class="relative">
+                                    <input id="profile-old-pass" type="password" class="input pr-12"
+                                        placeholder="Enter your current password" autocomplete="new-password"
+                                        value="" />
+                                    <button type="button" onclick="togglePassVisibility('profile-old-pass')"
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
+                                        <svg class="w-5 h-5 opacity-40 hover:opacity-100" fill="none"
+                                            stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label
+                                    class="text-white/40 text-[10px] mb-1.5 block uppercase tracking-[0.15em] font-bold">New
+                                    Password</label>
+                                <div class="relative">
+                                    <input id="profile-pass-input" type="password" class="input pr-12"
+                                        placeholder="Enter new password" autocomplete="new-password" value="" />
+                                    <button type="button" onclick="togglePassVisibility('profile-pass-input')"
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
+                                        <svg class="w-5 h-5 opacity-40 hover:opacity-100" fill="none"
+                                            stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <p class="text-white/20 text-[10px] mt-1.5 ml-1 italic">Min. 4 characters required</p>
+                            </div>
+                        </div>
+                        <div id="profile-pass-msg" class="hidden text-sm rounded-xl px-4 py-3 mt-3"></div>
+                        <button onclick="savePassword()" id="profile-pass-btn"
+                            class="w-full mt-4 font-semibold py-3 rounded-2xl transition-all"
+                            style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;cursor:pointer;font-size:14px;box-shadow:0 4px 16px rgba(245,158,11,0.3)">
+                            Update Password
+                        </button>
+                    </div>
+
+                    <!-- KYC / Verification Documents Card -->
+                    <div class="card" style="padding:24px">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-8 h-8 rounded-xl flex items-center justify-center"
+                                style="background:rgba(16,185,129,0.12)">
+                                <svg class="w-4 h-4" style="color:#34d399" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                </svg>
+                            </div>
+                            <span class="text-white font-semibold">Verification & Payment Info</span>
+                        </div>
+                        <p class="text-white/40 text-xs mb-5">Submit your verification documents and payment details for admin review.</p>
+
+                        <!-- Already Submitted Section -->
+                        <div id="kyc-submitted-section" class="hidden mb-6" style="background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);border-radius:16px;padding:16px">
+                            <div class="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Your Submitted Documents
+                            </div>
+                            <div class="space-y-3">
+                                <div id="kyc-show-video" class="hidden">
+                                    <div class="text-white/40 text-[10px] uppercase tracking-wider font-bold mb-1">Video Selfie</div>
+                                    <video id="kyc-show-video-player" controls class="w-full max-h-36 rounded-lg border border-white/10"></video>
+                                </div>
+                                <div id="kyc-show-selfie" class="hidden">
+                                    <div class="text-white/40 text-[10px] uppercase tracking-wider font-bold mb-1">Normal Selfie</div>
+                                    <img id="kyc-show-selfie-img" class="w-full max-h-36 object-cover rounded-lg border border-white/10 cursor-pointer" onclick="openFullView(this.src)" />
+                                </div>
+                                <div id="kyc-show-nid" class="hidden">
+                                    <div class="text-white/40 text-[10px] uppercase tracking-wider font-bold mb-1">National ID Card (Front)</div>
+                                    <img id="kyc-show-nid-front-img" class="w-full max-h-36 object-cover rounded-lg border border-white/10 cursor-pointer mb-2" onclick="openFullView(this.src)" />
+                                </div>
+                                <div id="kyc-show-nid-back" class="hidden">
+                                    <div class="text-white/40 text-[10px] uppercase tracking-wider font-bold mb-1">National ID Card (Back)</div>
+                                    <img id="kyc-show-nid-back-img" class="w-full max-h-36 object-cover rounded-lg border border-white/10 cursor-pointer" onclick="openFullView(this.src)" />
+                                </div>
+                                <div id="kyc-show-email" class="hidden">
+                                    <div class="text-white/40 text-[10px] uppercase tracking-wider font-bold mb-1">Email</div>
+                                    <div id="kyc-show-email-text" class="text-white/80 text-sm bg-white/5 rounded-lg px-3 py-2 border border-white/5"></div>
+                                </div>
+                                <div id="kyc-show-payment" class="hidden">
+                                    <div class="text-white/40 text-[10px] uppercase tracking-wider font-bold mb-1">Payment Info</div>
+                                    <div class="space-y-1">
+                                        <div id="kyc-show-wallet-type" class="text-white/60 text-xs"></div>
+                                        <div id="kyc-show-payment-text" class="text-white/80 text-sm bg-white/5 rounded-lg px-3 py-2 border border-white/5"></div>
+                                    </div>
+                                </div>
+                                <div id="kyc-show-qr" class="hidden">
+                                    <div class="text-white/40 text-[10px] uppercase tracking-wider font-bold mb-1">Payment QR Code</div>
+                                    <img id="kyc-show-qr-img" class="w-32 h-32 object-contain rounded-lg border border-white/10 cursor-pointer" onclick="openFullView(this.src)" />
+                                </div>
+                                <div id="kyc-show-note" class="hidden">
+                                    <div class="text-white/40 text-[10px] uppercase tracking-wider font-bold mb-1">Note for Admin</div>
+                                    <div id="kyc-show-note-text" class="text-white/80 text-sm bg-white/5 rounded-lg px-3 py-2 border border-white/5 whitespace-pre-wrap"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Capture / Input Section -->
+                        <div id="kyc-form-section">
+                        <div class="space-y-5">
+                            <!-- Video Selfie -->
+                            <div>
+                                <label class="text-white/40 text-[10px] mb-2 block uppercase tracking-[0.15em] font-bold">Video Selfie</label>
+                                <div id="kyc-video-preview" class="hidden mb-2">
+                                    <video id="kyc-video-player" controls class="w-full max-h-40 rounded-xl border border-white/10"></video>
+                                </div>
+                                <button onclick="recordVideoSelfie()" class="w-full flex items-center justify-center gap-2 text-sm text-white/60 hover:text-white/90 transition-colors bg-white/5 px-3 py-3 border border-white/10 rounded-xl hover:border-emerald-500/30">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                    <span id="kyc-video-label">Record Video Selfie</span>
+                                </button>
+                            </div>
+
+                            <!-- Normal Selfie -->
+                            <div>
+                                <label class="text-white/40 text-[10px] mb-2 block uppercase tracking-[0.15em] font-bold">Normal Selfie</label>
+                                <div id="kyc-selfie-preview" class="hidden mb-2">
+                                    <img id="kyc-selfie-img" class="w-full max-h-40 object-cover rounded-xl border border-white/10" />
+                                </div>
+                                <button onclick="takeKycSelfie()" class="w-full flex items-center justify-center gap-2 text-sm text-white/60 hover:text-white/90 transition-colors bg-white/5 px-3 py-3 border border-white/10 rounded-xl hover:border-emerald-500/30">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                    <span id="kyc-selfie-label">Take Selfie</span>
+                                </button>
+                            </div>
+
+                            <!-- NID Card -->
+                            <div>
+                                <label class="text-white/40 text-[10px] mb-2 block uppercase tracking-[0.15em] font-bold">National ID Card — Front</label>
+                                <div id="kyc-nid-front-preview" class="hidden mb-2">
+                                    <img id="kyc-nid-front-img" class="w-full max-h-40 object-cover rounded-xl border border-white/10" />
+                                </div>
+                                <button onclick="takeKycNidPhoto('front')" class="w-full flex items-center justify-center gap-2 text-sm text-white/60 hover:text-white/90 transition-colors bg-white/5 px-3 py-3 border border-white/10 rounded-xl hover:border-emerald-500/30">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                    <span id="kyc-nid-front-label">Take NID Front Photo</span>
+                                </button>
+                            </div>
+                            <div>
+                                <label class="text-white/40 text-[10px] mb-2 block uppercase tracking-[0.15em] font-bold">National ID Card — Back</label>
+                                <div id="kyc-nid-back-preview" class="hidden mb-2">
+                                    <img id="kyc-nid-back-img" class="w-full max-h-40 object-cover rounded-xl border border-white/10" />
+                                </div>
+                                <button onclick="takeKycNidPhoto('back')" class="w-full flex items-center justify-center gap-2 text-sm text-white/60 hover:text-white/90 transition-colors bg-white/5 px-3 py-3 border border-white/10 rounded-xl hover:border-emerald-500/30">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                    <span id="kyc-nid-back-label">Take NID Back Photo</span>
+                                </button>
+                            </div>
+
+                            <!-- Email -->
+                            <div>
+                                <label class="text-white/40 text-[10px] mb-2 block uppercase tracking-[0.15em] font-bold">Email Address</label>
+                                <input id="kyc-email" type="email" class="input" placeholder="e.g. yourname@email.com" />
+                            </div>
+
+                            <!-- Payment Address -->
+                            <div>
+                                <label class="text-white/40 text-[10px] mb-2 block uppercase tracking-[0.15em] font-bold">Wallet Type</label>
+                                <input id="kyc-wallet-type" type="text" class="input" placeholder="e.g. bKash, Nagad, Bank, USDT TRC20, PayPal…" />
+                            </div>
+                            <div>
+                                <label class="text-white/40 text-[10px] mb-2 block uppercase tracking-[0.15em] font-bold">Payment Address / Number</label>
+                                <input id="kyc-payment-address" type="text" class="input" placeholder="e.g. 01XXXXXXXXX, account number, wallet address…" />
+                            </div>
+
+                            <!-- Payment QR Code -->
+                            <div>
+                                <label class="text-white/40 text-[10px] mb-2 block uppercase tracking-[0.15em] font-bold">Payment QR Code</label>
+                                <div id="kyc-qr-preview" class="hidden mb-2">
+                                    <img id="kyc-qr-img" class="w-40 h-40 object-contain rounded-xl border border-white/10 mx-auto" />
+                                </div>
+                                <label class="w-full flex items-center justify-center gap-2 cursor-pointer text-sm text-white/60 hover:text-white/90 transition-colors bg-white/5 px-3 py-3 border border-white/10 rounded-xl hover:border-emerald-500/30">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                    <span id="kyc-qr-label">Upload QR Code Image</span>
+                                    <input type="file" id="kyc-qr-input" accept="image/*" class="hidden" onchange="previewKycQrUpload(this)" />
+                                </label>
+                            </div>
+
+                            <!-- Note for Admin -->
+                            <div>
+                                <label class="text-white/40 text-[10px] mb-2 block uppercase tracking-[0.15em] font-bold">Note for Admin</label>
+                                <textarea id="kyc-note-admin" class="input" style="min-height:80px;resize:vertical" placeholder="Any message or note you want admin to see…"></textarea>
+                            </div>
+                        </div>
+
+                        <div id="kyc-msg" class="hidden text-sm rounded-xl px-4 py-3 mt-4"></div>
+                        <button onclick="saveKycData()" id="kyc-save-btn" class="w-full mt-5 font-semibold py-3 rounded-2xl transition-all"
+                            style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;cursor:pointer;font-size:14px;box-shadow:0 4px 16px rgba(16,185,129,0.3)">
+                            Submit Verification Info
+                        </button>
+                        </div><!-- /kyc-form-section -->
+
+                        <!-- Locked Message (shown when all data submitted) -->
+                        <div id="kyc-locked-msg" class="hidden">
+                            <div class="rounded-xl p-4 mt-4" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2)">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:rgba(16,185,129,0.15)">
+                                        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                    </div>
+                                    <div>
+                                        <div class="text-emerald-400 font-semibold text-sm">All Documents Submitted</div>
+                                        <div class="text-white/40 text-xs mt-0.5">Your verification info has been locked. Only admin can reset your documents if changes are needed.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div><!-- /max-w-4xl -->
+    </main>
+
+    <script src="supabase-config.js"></script>
+    <script src="push-helper.js"></script>
+    <script>ensureNotificationsGate();</script>
+    <script>
+        // ── Image optimisation helpers ──────────────────────────────────
+        const _imgCache = new Map();
+        function imgUrl(url, width = 80, height = 80, resize = 'cover') {
+            if (!url) return '';
+            const key = `${url}__${width}__${height}__${resize}`;
+            if (_imgCache.has(key)) return _imgCache.get(key);
+            let result = url;
+            try {
+                if (url.includes('/storage/v1/object/public/')) {
+                    const path = url.split('/storage/v1/object/public/')[1];
+                    result = `${SUPABASE_URL}/storage/v1/render/image/public/${path}?width=${width}&height=${height}&resize=${resize}&quality=80`;
+                }
+            } catch (e) { result = url; }
+            _imgCache.set(key, result);
+            return result;
+        }
+        function avatarImg(url, cssClass = 'w-full h-full rounded-full object-cover') {
+            return url ? `<img src="${imgUrl(url, 80, 80, 'cover')}" loading="lazy" class="${cssClass}" decoding="async">` : '';
+        }
+        // ───────────────────────────────────────────────────────────────
+
+        // ─── STATE ───────────────────────────────────────────────────
+        let currentUser = null, myProfile = null, myCompany = null;
+        let timerInterval = null, timerStart = null, currentStatus = null;
+        let myIP = null, myLat = null, myLng = null;
+        let realtimeSub = null;
+
+        // ─── SIDEBAR ─────────────────────────────────────────────────
+        function toggleSidebar() {
+            const s = document.getElementById('sidebar');
+            const o = document.getElementById('overlay');
+            s.classList.toggle('open');
+            o.classList.toggle('show');
+        }
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('overlay').classList.remove('show');
+        }
+        function showSection(name) {
+            // Block navigation to non-profile sections if verification is pending
+            if (verificationBlocked && name !== 'profile') {
+                alert('⚠️ Please complete your verification first. Submit all required documents in your profile to unlock other features.');
+                showSection('profile');
+                return;
+            }
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('section-' + name).classList.add('active');
+            document.getElementById('nav-' + name).classList.add('active');
+            const titles = { clock: 'Clock In / Out', wall: 'Social Wall', notifs: 'Notifications', history: 'My History', profile: 'My Profile' };
+            document.getElementById('page-title').textContent = titles[name] || name;
+            closeSidebar();
+            // Clear bell badge for wall when visiting wall
+            if (name === 'wall') {
+                const wallBadge = document.getElementById('wall-badge');
+                const bellWall = document.getElementById('bell-wall-badge');
+                if (wallBadge) { wallBadge.classList.add('hidden'); wallBadge.textContent = '0'; }
+                if (bellWall) { bellWall.textContent = '0'; bellWall.className = 'bell-dropdown-badge zero'; }
+                _syncTopbarBellTotal();
+                // Mark wall as seen (persists across logins)
+                if (currentUser?.id) localStorage.setItem('wall_last_seen_' + currentUser.id, new Date().toISOString());
+                loadPosts();
+            }
+            if (name === 'notifs') loadNotifications();
+            if (name === 'history') loadHistory();
+            if (name === 'profile') loadProfileData();
+        }
+
+        function _syncTopbarBellTotal() {
+            const notifCount = parseInt(document.getElementById('bell-notif-badge')?.textContent) || 0;
+            const wallCount = parseInt(document.getElementById('bell-wall-badge')?.textContent) || 0;
+            const total = notifCount + wallCount;
+            const topBadge = document.getElementById('topbar-notif-count');
+            if (topBadge) {
+                if (total > 0) { topBadge.textContent = total > 99 ? '99+' : total; topBadge.style.display = 'flex'; }
+                else topBadge.style.display = 'none';
+            }
+        }
+
+        function toggleBellDropdown(e) {
+            e.stopPropagation();
+            const btn = document.getElementById('bell-btn');
+            const dd = document.getElementById('bell-dropdown');
+            const isOpen = dd.classList.contains('open');
+            if (isOpen) { closeBellDropdown(); } else { dd.classList.add('open'); btn.classList.add('open'); }
+        }
+
+        function closeBellDropdown() {
+            document.getElementById('bell-dropdown')?.classList.remove('open');
+            document.getElementById('bell-btn')?.classList.remove('open');
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!document.getElementById('bell-btn')?.contains(e.target)) closeBellDropdown();
+        });
+
+        function openModal(id) { document.getElementById(id).classList.add('show'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+        // ─── CLOCK ───────────────────────────────────────────────────
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerStart = Date.now();
+            timerInterval = setInterval(() => {
+                const s = Math.floor((Date.now() - timerStart) / 1000);
+                const h = String(Math.floor(s / 3600)).padStart(2, '0');
+                const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+                const sc = String(s % 60).padStart(2, '0');
+                document.getElementById('timer-display').textContent = `${h}:${m}:${sc}`;
+            }, 1000);
+        }
+        function stopTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            document.getElementById('timer-display').textContent = '00:00:00';
+        }
+
+        function updateStatusUI(status) {
+            currentStatus = status;
+            const badges = { in: ['badge-in', '🟢 Clocked In', '#10b981'], break_in: ['badge-in', '🟢 Clocked In', '#10b981'], break: ['badge-break', '🟡 On Break', '#f59e0b'], out: ['badge-out', '⚪ Not Clocked In', '#94a3b8'], null: ['badge-out', '⚪ Not Clocked In', '#94a3b8'] };
+            const [cls, label, color] = badges[status] || badges.null;
+            const topBadge = document.getElementById('top-status');
+            topBadge.className = 'status-badge ' + cls;
+            topBadge.innerHTML = `<span class="pulse-dot" style="background:${color}"></span><span>${label}</span>`;
+            const sessionLabels = { in: 'Currently Clocked In', break_in: 'Currently Clocked In', break: 'Currently On Break', out: 'Session Ended', null: '—' };
+            document.getElementById('session-label').textContent = sessionLabels[status] || '—';
+
+            // Update buttons
+            document.getElementById('btn-check-in').disabled = (status === 'in' || status === 'break_in' || status === 'break');
+
+            const breakBtn = document.getElementById('btn-break');
+            if (status === 'break') {
+                breakBtn.disabled = false;
+                breakBtn.innerHTML = `
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    End Break
+                `;
+                breakBtn.onclick = () => clockAction('break_in'); // Resuming work after break
+                breakBtn.className = 'clock-btn btn-in'; // green color for "Back to work"
+            } else {
+                breakBtn.disabled = (status !== 'in' && status !== 'break_in');
+                breakBtn.innerHTML = `
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Take Break
+                `;
+                breakBtn.onclick = () => clockAction('break');
+                breakBtn.className = 'clock-btn btn-brk';
+            }
+
+            document.getElementById('btn-check-out').disabled = !status || status === 'out';
+            if (status === 'in' || status === 'break_in' || status === 'break') startTimer();
+            else stopTimer();
+
+            // Refresh daily stats when status changes
+            loadDailyStats();
+        }
+
+        async function clockAction(action) {
+            // Block if verification is pending
+            if (verificationBlocked) {
+                alert('⚠️ Please complete your verification first before clocking in/out.');
+                showSection('profile');
+                return;
+            }
+
+            const msgEl = document.getElementById('clock-msg');
+
+            // Require location for every clock action
+            if (!myLat || !myLng) {
+                msgEl.className = 'text-sm rounded-xl px-4 py-3 bg-yellow-500/10 text-yellow-300';
+                msgEl.textContent = '📍 Getting your location…';
+                msgEl.classList.remove('hidden');
+
+                const locationGranted = await new Promise(resolve => {
+                    if (!navigator.geolocation) {
+                        resolve(false);
+                        return;
+                    }
+                    navigator.geolocation.getCurrentPosition(
+                        pos => {
+                            myLat = pos.coords.latitude;
+                            myLng = pos.coords.longitude;
+                            resolve(true);
+                        },
+                        () => resolve(false),
+                        { enableHighAccuracy: true, timeout: 10000 }
+                    );
+                });
+
+                if (!locationGranted) {
+                    msgEl.className = 'text-sm rounded-xl px-4 py-3 bg-red-500/10 text-red-300';
+                    msgEl.textContent = '❌ Location access is required for clock in/out. Please enable location permissions in your browser and try again.';
+                    return;
+                }
+            }
+
+            // Check if selfie is required (company-wide setting OR per-staff override)
+            const requireSelfie = String(myProfile.companies?.require_selfie_clock) === 'true'
+                                || String(myProfile.require_selfie) === 'true';
+            if (requireSelfie) {
+                // Open selfie camera modal and wait for capture
+                pendingClockAction = action;
+                openClockSelfieCamera();
+                return;
+            }
+
+            // Proceed without selfie
+            await submitClockAction(action, null);
+        }
+
+        let pendingClockAction = null;
+        let clockSelfieStream = null;
+
+        function openClockSelfieCamera() {
+            openModal('modal-clock-selfie');
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+                .then(stream => {
+                    clockSelfieStream = stream;
+                    document.getElementById('clock-selfie-video').srcObject = stream;
+                })
+                .catch(() => {
+                    alert('Camera access denied. Cannot proceed without selfie.');
+                    closeModal('modal-clock-selfie');
+                    pendingClockAction = null;
+                });
+        }
+
+        function captureClockSelfie() {
+            const video = document.getElementById('clock-selfie-video');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            canvas.toBlob(async blob => {
+                closeClockSelfieCamera();
+                const action = pendingClockAction;
+                pendingClockAction = null;
+
+                // Upload selfie
+                const ext = 'jpg';
+                const path = `${currentUser.id}/clock-selfies/${Date.now()}.${ext}`;
+                const { error: upErr } = await sb.storage.from('avatars').upload(path, blob, { upsert: false, contentType: 'image/jpeg' });
+                let selfieUrl = null;
+                if (!upErr) {
+                    const { data: pub } = sb.storage.from('avatars').getPublicUrl(path);
+                    selfieUrl = pub.publicUrl;
+                }
+
+                await submitClockAction(action, selfieUrl);
+            }, 'image/jpeg', 0.8);
+        }
+
+        function closeClockSelfieCamera() {
+            if (clockSelfieStream) clockSelfieStream.getTracks().forEach(t => t.stop());
+            clockSelfieStream = null;
+            closeModal('modal-clock-selfie');
+        }
+
+        async function submitClockAction(action, selfieUrl) {
+            const msgEl = document.getElementById('clock-msg');
+            msgEl.className = 'text-sm rounded-xl px-4 py-3 bg-yellow-500/10 text-yellow-300';
+            msgEl.textContent = 'Recording…';
+            msgEl.classList.remove('hidden');
+
+            const insertData = {
+                user_id: currentUser.id,
+                company_id: myProfile.company_id,
+                status: action,
+                ip_address: myIP,
+                latitude: myLat,
+                longitude: myLng
+            };
+            if (selfieUrl) insertData.selfie_url = selfieUrl;
+
+            const { error } = await sb.from('attendance').insert(insertData);
+
+            if (error) {
+                msgEl.className = 'text-sm rounded-xl px-4 py-3 bg-red-500/10 text-red-300';
+                msgEl.textContent = 'Error: ' + error.message;
+                return;
+            }
+            msgEl.className = 'text-sm rounded-xl px-4 py-3 bg-green-500/10 text-green-300';
+            const msgs = { in: '✅ Clocked in successfully!', break_in: '💪 Back to work!', break: '☕ Break started.', out: '👋 Clocked out. See you!' };
+            msgEl.textContent = msgs[action];
+            updateStatusUI(action);
+            setTimeout(() => msgEl.classList.add('hidden'), 3500);
+        }
+
+        // ─── POSTS ───────────────────────────────────────────────────
+        function timeAgo(ts) {
+            const s = Math.floor((Date.now() - new Date(ts)) / 1000);
+            if (s < 60) return 'Just now';
+            if (s < 3600) return Math.floor(s / 60) + 'm ago';
+            if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+            return Math.floor(s / 86400) + 'd ago';
+        }
+
+        function initials(name) {
+            if (!name) return '?';
+            return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+        }
+
+        async function loadPosts() {
+            const feed = document.getElementById('posts-feed');
+            if (!feed) return;
+            feed.innerHTML = '<div class="text-center text-white/40 py-8">Loading posts…</div>';
+
+            const filterType = document.getElementById('wall-filter').value;
+            const customDates = document.getElementById('wall-custom-dates');
+            if (filterType === 'custom') customDates.classList.remove('hidden');
+            else customDates.classList.add('hidden');
+
+            let query = sb
+                .from('posts')
+                .select(`*, profiles(full_name, avatar_url), post_likes(user_id), post_comments(id, content, created_at, profiles(full_name))`)
+                .eq('company_id', myProfile.company_id);
+
+            const range = getRange(filterType, 'wall-start', 'wall-end');
+            if (range.start) query = query.gte('created_at', range.start.toISOString());
+            if (range.end) query = query.lte('created_at', range.end.toISOString());
+
+            const { data: posts, error } = await query
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            if (error) { feed.innerHTML = '<div class="text-red-400 text-sm">Error loading posts</div>'; return; }
+            if (!posts.length) { feed.innerHTML = '<div class="text-center text-white/40 py-8">No posts yet. Be the first to share! 🎉</div>'; return; }
+
+            feed.innerHTML = '';
+            for (const p of posts) {
+                const card = buildPostCard(p);
+                feed.appendChild(card);
+                // record view (best-effort) and fetch view count
+                recordPostView(p.id);
+                (async () => {
+                    const v = await fetchPostViewsCount(p.id);
+                    const vcEl = document.getElementById('view-count-' + p.id);
+                    if (vcEl) vcEl.textContent = (v !== null ? (v + ' views') : '— views');
+                    const likers = await fetchPostLikers(p.id);
+                    const likeNamesEl = document.getElementById('like-names-' + p.id);
+                    if (likeNamesEl) {
+                        if (likers.length === 0) likeNamesEl.textContent = 'No likes yet';
+                        else if (likers.length <= 3) likeNamesEl.textContent = likers.map(l => l.name).join(', ');
+                        else likeNamesEl.textContent = likers.slice(0,3).map(l=>l.name).join(', ') + ' and ' + (likers.length-3) + ' more';
+                    }
+                })();
+            }
+
+            // Realtime
+            if (realtimeSub) sb.removeChannel(realtimeSub);
+            realtimeSub = sb.channel('posts-realtime')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts', filter: `company_id=eq.${myProfile.company_id}` }, async () => {
+                    const badge = document.getElementById('wall-badge');
+                    badge.classList.remove('hidden');
+                    badge.textContent = (parseInt(badge.textContent || '0') + 1);
+                    // Also update bell dropdown wall badge
+                    const bellWall = document.getElementById('bell-wall-badge');
+                    if (bellWall) {
+                        const newCount = parseInt(badge.textContent);
+                        bellWall.textContent = newCount > 99 ? '99+' : newCount;
+                        bellWall.className = 'bell-dropdown-badge';
+                        // Update total topbar count
+                        const notifCount = parseInt(document.getElementById('bell-notif-badge')?.textContent) || 0;
+                        const total = newCount + notifCount;
+                        const topBadge = document.getElementById('topbar-notif-count');
+                        if (topBadge) { topBadge.textContent = total > 99 ? '99+' : total; topBadge.style.display = 'flex'; }
+                    }
+                    if (document.getElementById('section-wall').classList.contains('active')) {
+                        badge.classList.add('hidden'); badge.textContent = '0';
+                        if (bellWall) { bellWall.textContent = '0'; bellWall.className = 'bell-dropdown-badge zero'; }
+                        await loadPosts();
+                    }
+                })
+                .subscribe();
+        }
+
+        function buildPostCard(post) {
+            const el = document.createElement('div');
+            el.className = 'post-card fade-in';
+            el.id = 'post-' + post.id;
+
+            const isLiked = post.post_likes?.some(l => l.user_id === currentUser.id);
+            const likeCount = post.post_likes?.length || 0;
+            const commentCount = post.post_comments?.length || 0;
+            const authorName = post.profiles?.full_name || 'User';
+
+            el.innerHTML = `
+    <div class="flex items-start gap-3">
+      <div class="cursor-pointer group flex-shrink-0" onclick="openAuthorProfileStaff('${post.author_id}','${authorName.replace(/'/g,"\\'")}','${post.profiles?.avatar_url || ''}')">
+        ${post.profiles?.avatar_url 
+            ? `<img src="${imgUrl(post.profiles.avatar_url, 80, 80, 'cover')}" loading="lazy" class="avatar group-hover:ring-2 group-hover:ring-violet-500/50 transition-all" style="border-radius:50%" alt="avatar" decoding="async"/>` 
+            : `<div class="avatar group-hover:ring-2 group-hover:ring-violet-500/50 transition-all">${initials(authorName)}</div>`}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-semibold text-white text-sm cursor-pointer hover:text-violet-300 transition-colors" onclick="openAuthorProfileStaff('${post.author_id}','${authorName.replace(/'/g,"\\'")}','${post.profiles?.avatar_url || ''}')">${authorName}</span>
+          <span class="text-white/30 text-xs">${timeAgo(post.created_at)}</span>
+        </div>
+        ${post.image_url ? `<div class="mt-3 rounded-xl overflow-hidden border border-white/10 cursor-zoom-in" onclick="openFullView('${post.image_url}')">
+          <img src="${imgUrl(post.image_url, 800, 800, 'contain')}" class="w-full max-h-80 object-cover hover:scale-[1.02] transition-transform duration-300" loading="lazy" alt="post image" decoding="async"/>
+        </div>` : ''}
+        ${post.content ? (() => {
+                    const full = escHtml(post.content);
+                    const limit = 150;
+                    if (post.content.length <= limit) {
+                        return `<p class="text-white/80 text-sm mt-3 leading-relaxed whitespace-pre-wrap">${full}</p>`;
+                    }
+                    const preview = escHtml(post.content.slice(0, limit));
+                    return `<div class="mt-3">
+            <p class="text-white/80 text-sm leading-relaxed whitespace-pre-wrap" id="stext-${post.id}">${preview}<span class="text-white/40">…</span></p>
+            <p class="text-white/80 text-sm leading-relaxed whitespace-pre-wrap hidden" id="stext-full-${post.id}">${full}</p>
+            <button onclick="toggleStaffReadMore('${post.id}')" id="sread-btn-${post.id}" class="text-[11px] font-semibold mt-1 text-violet-400 hover:text-violet-300 transition-colors">Read more</button>
+          </div>`;
+                })() : ''}
+      </div>
+    </div>
+    <div class="flex items-center gap-3 mt-4 flex-wrap">
+            <button class="like-btn ${isLiked ? 'liked' : ''}" id="like-btn-${post.id}" onclick="toggleLike('${post.id}', ${isLiked})">
+        <svg class="w-4 h-4" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+        <span id="like-count-${post.id}">${likeCount}</span> ${likeCount === 1 ? 'Like' : 'Likes'}
+      </button>
+            <button class="like-btn" onclick="showLikers('${post.id}')" title="Who liked">
+                <span id="like-names-${post.id}" class="text-xs text-white/60 ml-2">View Likes</span>
+            </button>
+            <div class="text-white/40 text-xs ml-2" id="view-count-${post.id}" title="Views">— views</div>
+      <button class="like-btn" onclick="toggleComments('${post.id}')">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        ${commentCount} ${commentCount === 1 ? 'Comment' : 'Comments'}
+      </button>
+    </div>
+    <div id="comments-${post.id}" class="hidden mt-4 space-y-3 border-t border-white/5 pt-4">
+      <div class="space-y-2" id="comment-list-${post.id}">
+        ${(post.post_comments || []).map(c => `
+          <div class="flex items-start gap-2">
+            <div class="avatar" style="width:28px;height:28px;font-size:11px">${initials(c.profiles?.full_name)}</div>
+            <div class="flex-1 bg-white/5 rounded-12 px-3 py-2" style="border-radius:12px">
+              <div class="text-white/70 text-xs font-semibold">${escHtml(c.profiles?.full_name || 'User')}</div>
+              <div class="text-white/80 text-sm">${escHtml(c.content)}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="flex gap-2">
+        <input type="text" id="comment-input-${post.id}" class="comment-input flex-1" placeholder="Write a comment…" onkeydown="if(event.key==='Enter')addComment('${post.id}')"/>
+        <button onclick="addComment('${post.id}')" class="btn-post px-4 py-2 text-xs" style="padding:8px 16px">Send</button>
+      </div>
+    </div>
+  `;
+            return el;
+        }
+
+        async function openAuthorProfileStaff(authorId, authorName, avatarUrl) {
+            if (!authorId || authorId === 'null' || authorId === 'undefined') return;
+            const content = document.getElementById('author-profile-content');
+            if (!content) return;
+            content.innerHTML = '<div class="p-8 text-center text-white/40 text-sm">Loading…</div>';
+            openModal('modal-author-profile');
+
+            const { data: posts } = await sb.from('posts')
+                .select('id,content,image_url,created_at,post_likes(user_id),post_comments(id)')
+                .eq('author_id', authorId)
+                .eq('company_id', myProfile.company_id)
+                .order('created_at', { ascending: false })
+                .limit(30);
+
+            const av = avatarUrl
+                ? `<img src="${imgUrl(avatarUrl, 200, 200, 'cover')}" loading="lazy" class="w-20 h-20 rounded-2xl object-cover border-2 border-violet-500/30" decoding="async">`
+                : `<div style="width:80px;height:80px;border-radius:16px;background:linear-gradient(135deg,rgba(108,99,255,0.3),rgba(16,185,129,0.2));display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#a78bfa;border:2px solid rgba(108,99,255,0.3)">${initials(authorName)}</div>`;
+
+            const escHtml2 = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const postsHtml = (posts || []).map(p => {
+                const likeCount = p.post_likes?.length || 0;
+                const commentCount = p.post_comments?.length || 0;
+                return `<div class="p-4 rounded-xl border border-white/8 bg-white/[0.03] space-y-2 hover:border-white/15 transition-colors" style="border-color:rgba(255,255,255,0.07)">
+            ${p.image_url ? `<div class="rounded-lg overflow-hidden cursor-zoom-in" onclick="openFullView('${p.image_url}')"><img src="${imgUrl(p.image_url, 800, 800, 'contain')}" class="w-full max-h-48 object-cover hover:brightness-110 transition-all" loading="lazy" decoding="async"/></div>` : ''}
+            ${p.content ? `<p class="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">${escHtml2(p.content)}</p>` : ''}
+            <div class="flex items-center gap-4 text-white/30 text-xs">
+                <span>${timeAgo(p.created_at)}</span>
+                <span>❤️ ${likeCount}</span>
+                <span>💬 ${commentCount}</span>
+            </div>
+        </div>`;
+            }).join('');
+
+            content.innerHTML = `
+        <div style="background:linear-gradient(135deg,rgba(108,99,255,0.15),rgba(16,185,129,0.05));padding:24px;border-bottom:1px solid rgba(255,255,255,0.07)">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-white/40 text-xs uppercase tracking-widest font-bold">Author Profile</span>
+                <button onclick="closeModal('modal-author-profile')" class="w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all text-lg">✕</button>
+            </div>
+            <div class="flex items-center gap-4">
+                ${av}
+                <div>
+                    <div class="text-white font-bold text-lg">${escHtml2(authorName)}</div>
+                    <div class="text-white/40 text-sm mt-1">${(posts||[]).length} post${(posts||[]).length!==1?'s':''} in this company</div>
+                </div>
+            </div>
+        </div>
+        <div class="p-4 space-y-3">
+            ${postsHtml || '<div class="text-center text-white/30 py-8 text-sm">No posts yet.</div>'}
+        </div>`;
+        }
+
+        // Record a view for the post (attempts to insert into `post_views` table if available)
+        async function recordPostView(postId) {
+            try {
+                if (!currentUser?.id) return;
+                // Try to upsert view (unique per post_id + user_id) — requires post_views table in DB
+                await sb.from('post_views').upsert({ post_id: postId, user_id: currentUser.id }, { onConflict: 'post_id,user_id' });
+            } catch (e) {
+                // If table doesn't exist or RLS blocks, ignore silently
+                // console.warn('recordPostView failed', e);
+            }
+        }
+
+        async function fetchPostViewsCount(postId) {
+            try {
+                // Query count from post_views if table exists
+                const { count, error } = await sb.from('post_views').select('post_id', { count: 'exact', head: true }).eq('post_id', postId);
+                if (error) return null;
+                return count || 0;
+            } catch (e) { return null; }
+        }
+
+        async function fetchPostLikers(postId) {
+            try {
+                const { data, error } = await sb.from('post_likes').select('user_id,profiles(full_name,avatar_url)').eq('post_id', postId);
+                if (error || !data) return [];
+                return data.map(d => ({ id: d.user_id, name: d.profiles?.full_name || 'User', avatar: d.profiles?.avatar_url || null }));
+            } catch (e) { return []; }
+        }
+
+        // Show likers in a small modal
+        async function showLikers(postId) {
+            const likers = await fetchPostLikers(postId);
+            const modalId = 'likers-modal-' + postId;
+            let modal = document.getElementById(modalId);
+            if (modal) { modal.remove(); }
+            modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'modal-bg show';
+            modal.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:10000';
+            const box = document.createElement('div');
+            box.className = 'modal';
+            box.style.maxWidth = '360px';
+            box.innerHTML = `<h3 class="text-white font-semibold">Liked by</h3><div style="margin-top:12px;max-height:320px;overflow:auto">${likers.map(l => `
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03)">
+                    <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;background:#222;flex-shrink:0">${l.avatar ? `<img src="${l.avatar}" style="width:100%;height:100%;object-fit:cover">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff">${initials(l.name)}</div>`}</div>
+                    <div style="color:#e6eef8">${escHtml(l.name)}</div>
+                </div>`).join('')}</div>
+                <div style="text-align:right;margin-top:12px"><button class="btn" onclick="document.getElementById('${modalId}').remove()">Close</button></div>`;
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+        }
+
+        function toggleComments(postId) {
+            document.getElementById('comments-' + postId).classList.toggle('hidden');
+        }
+
+        function toggleStaffReadMore(postId) {
+            const preview = document.getElementById('stext-' + postId);
+            const full = document.getElementById('stext-full-' + postId);
+            const btn = document.getElementById('sread-btn-' + postId);
+            const isExpanded = full.classList.contains('hidden');
+            preview.classList.toggle('hidden', isExpanded);
+            full.classList.toggle('hidden', !isExpanded);
+            btn.textContent = isExpanded ? 'Show less' : 'Read more';
+        }
+
+        async function toggleLike(postId, isLiked) {
+            const btn = document.getElementById('like-btn-' + postId);
+            const countEl = document.getElementById('like-count-' + postId);
+            if (isLiked) {
+                await sb.from('post_likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+                btn.classList.remove('liked');
+                countEl.textContent = Math.max(0, parseInt(countEl.textContent) - 1);
+                btn.setAttribute('onclick', `toggleLike('${postId}', false)`);
+            } else {
+                await sb.from('post_likes').insert({ post_id: postId, user_id: currentUser.id });
+                btn.classList.add('liked');
+                countEl.textContent = parseInt(countEl.textContent) + 1;
+                btn.setAttribute('onclick', `toggleLike('${postId}', true)`);
+            }
+        }
+
+        async function addComment(postId) {
+            const inp = document.getElementById('comment-input-' + postId);
+            const content = inp.value.trim();
+            if (!content) return;
+            inp.value = '';
+            const { data, error } = await sb.from('post_comments').insert({
+                post_id: postId, author_id: currentUser.id, content
+            }).select('*, profiles(full_name)').single();
+            if (error || !data) return;
+            const list = document.getElementById('comment-list-' + postId);
+            list.insertAdjacentHTML('beforeend', `
+    <div class="flex items-start gap-2">
+      <div class="avatar" style="width:28px;height:28px;font-size:11px">${initials(myProfile.full_name)}</div>
+      <div class="flex-1 bg-white/5 rounded-12 px-3 py-2" style="border-radius:12px">
+        <div class="text-white/70 text-xs font-semibold">${escHtml(myProfile.full_name || 'Me')}</div>
+        <div class="text-white/80 text-sm">${escHtml(content)}</div>
+      </div>
+    </div>
+  `);
+        }
+
+        function previewImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const preview = document.getElementById('image-preview');
+            const wrap = document.getElementById('image-preview-wrap');
+            const name = document.getElementById('image-name');
+            const reader = new FileReader();
+            reader.onload = e => { preview.src = e.target.result; wrap.classList.remove('hidden'); name.textContent = file.name; name.classList.remove('hidden'); };
+            reader.readAsDataURL(file);
+        }
+        function clearImagePreview() {
+            document.getElementById('post-image').value = '';
+            document.getElementById('image-preview-wrap').classList.add('hidden');
+            document.getElementById('image-name').classList.add('hidden');
+        }
+
+        async function submitPost() {
+            const btn = document.getElementById('post-btn');
+            const content = document.getElementById('post-content').value.trim();
+            const file = document.getElementById('post-image').files[0];
+            if (!content && !file) return;
+
+            btn.disabled = true; btn.textContent = 'Posting…';
+            let image_url = null;
+
+            if (file) {
+                const ext = file.name.split('.').pop();
+                const path = `${currentUser.id}/${Date.now()}.${ext}`;
+                const { error: upErr } = await sb.storage.from('post-images').upload(path, file, { upsert: true });
+                if (!upErr) {
+                    const { data: pub } = sb.storage.from('post-images').getPublicUrl(path);
+                    image_url = pub.publicUrl;
+                }
+            }
+
+            await sb.from('posts').insert({
+                company_id: myProfile.company_id, author_id: currentUser.id, content: content || null, image_url
+            });
+
+            document.getElementById('post-content').value = '';
+            clearImagePreview();
+            btn.disabled = false; btn.textContent = 'Post Update';
+            await loadPosts();
+        }
+
+        // ─── NOTIFICATIONS ────────────────────────────────────────────
+        async function loadNotifications() {
+            const list = document.getElementById('notifs-list');
+            if (!list) return;
+            list.innerHTML = '<div class="text-center text-white/40 py-8">Loading…</div>';
+
+            const filterType = document.getElementById('notif-filter').value;
+            const customDates = document.getElementById('notif-custom-dates');
+            if (filterType === 'custom') customDates.classList.remove('hidden');
+            else customDates.classList.add('hidden');
+
+            let query = sb
+                .from('notifications')
+                .select('*, notification_reads(user_id)')
+                .eq('company_id', myProfile.company_id)
+                .or(`target_user_id.is.null,target_user_id.eq.${currentUser.id}`);
+
+            const range = getRange(filterType, 'notif-start', 'notif-end');
+            if (range.start) query = query.gte('created_at', range.start.toISOString());
+            if (range.end) query = query.lte('created_at', range.end.toISOString());
+
+            const { data: notifs } = await query.order('created_at', { ascending: false });
+
+            if (!notifs?.length) { list.innerHTML = '<div class="text-center text-white/40 py-8">No notifications yet.</div>'; return; }
+
+            // Compute unread for current user
+            const unread = notifs.filter(n => !n.notification_reads?.some(r => r.user_id === currentUser.id));
+
+            // Mark unread notifications as read now (so badge won't show them again)
+            try {
+                if (unread.length && currentUser?.id) {
+                    const rows = unread.map(n => ({ notification_id: n.id, user_id: currentUser.id }));
+                    await sb.from('notification_reads').upsert(rows, { onConflict: 'notification_id,user_id' });
+                    // reflect locally
+                    notifs.forEach(n => { if (rows.find(r => r.notification_id === n.id)) { n.notification_reads = n.notification_reads || []; n.notification_reads.push({ user_id: currentUser.id, read_at: new Date().toISOString() }); } });
+                }
+            } catch (e) {
+                console.warn('Mark notifications read failed', e);
+            }
+
+            const badge = document.getElementById('notif-badge');
+            if (badge) { badge.classList.add('hidden'); }
+
+            // Update topbar bell badge (only wall posts may remain)
+            const topBadge = document.getElementById('topbar-notif-count');
+            const bellNotifBadge = document.getElementById('bell-notif-badge');
+            const wallCount = parseInt(document.getElementById('bell-wall-badge')?.textContent) || 0;
+            const total = 0 + wallCount;
+            if (topBadge) {
+                if (total > 0) { topBadge.textContent = total > 99 ? '99+' : total; topBadge.style.display = 'flex'; }
+                else topBadge.style.display = 'none';
+            }
+            if (bellNotifBadge) {
+                bellNotifBadge.textContent = 0;
+                bellNotifBadge.className = 'bell-dropdown-badge zero';
+            }
+
+            list.innerHTML = '';
+            notifs.forEach(n => {
+                const isRead = n.notification_reads?.some(r => r.user_id === currentUser.id);
+                const isTargeted = n.target_user_id !== null;
+                const el = document.createElement('div');
+                el.className = `card cursor-pointer transition-all hover:border-violet-500/30 ${isRead ? 'opacity-70' : 'border-violet-500/20'}`;
+
+                let attachmentHtml = '';
+                if (n.attachment_url) {
+                    const isImg = n.attachment_type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(n.attachment_url);
+                    if (isImg) attachmentHtml = `<img src="${n.attachment_url}" onclick="event.stopPropagation(); openFullView('${n.attachment_url}')" class="w-full max-h-64 object-cover rounded-lg border border-white/10 mt-3 cursor-zoom-in hover:brightness-110 transition-all" />`;
+                    else if (n.attachment_type === 'link') attachmentHtml = `<a href="${n.attachment_url}" target="_blank" class="flex items-center gap-2 text-sky-400 text-xs truncate mt-2 font-medium hover:underline" onclick="event.stopPropagation()"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>Open Link</a>`;
+                    else attachmentHtml = `<a href="${n.attachment_url}" target="_blank" class="flex items-center gap-2 text-amber-400 text-xs truncate mt-2 font-medium hover:underline" onclick="event.stopPropagation()"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>Download Attached File</a>`;
+                }
+
+                el.innerHTML = `
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-cyan-400/20 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="text-white font-semibold text-sm">${escHtml(n.title)}</div>
+            ${!isRead ? '<span class="text-[10px] bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/30 font-bold uppercase tracking-wider">New</span>' : ''}
+            ${isTargeted ? '<span class="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 font-bold uppercase tracking-wider">Direct Message</span>' : ''}
+          </div>
+          <div class="text-white/60 text-sm mt-1 leading-relaxed whitespace-pre-wrap">${escHtml(n.body || '')}</div>
+          ${attachmentHtml}
+          <div class="text-white/30 text-xs mt-2">${timeAgo(n.created_at)}</div>
+        </div>
+      </div>
+    `;
+                el.onclick = () => markNotificationRead(n.id, el, isRead);
+                list.appendChild(el);
+            });
+        }
+
+        async function markNotificationRead(id, el, isRead) {
+            if (!isRead) {
+                await sb.from('notification_reads').upsert({ notification_id: id, user_id: currentUser.id }, { onConflict: 'notification_id,user_id' });
+                el.classList.add('opacity-70');
+                el.querySelector('.bg-violet-500\\/20')?.remove();
+                const badge = document.getElementById('notif-badge');
+                const count = parseInt(badge.textContent) - 1;
+                if (count <= 0) badge.classList.add('hidden'); else badge.textContent = count;
+            }
+        }
+
+        // ─── HISTORY ─────────────────────────────────────────────────
+        async function checkStaffWallCount() {
+            if (!myProfile?.company_id || !currentUser?.id) return;
+            const visitKey = 'wall_last_seen_' + currentUser.id;
+            const lastSeen = localStorage.getItem(visitKey);
+            let query = sb.from('posts').select('id', { count: 'exact', head: true }).eq('company_id', myProfile.company_id);
+            if (lastSeen) query = query.gt('created_at', lastSeen);
+            const { count } = await query;
+            const bellWall = document.getElementById('bell-wall-badge');
+            const wallBadge = document.getElementById('wall-badge');
+            const wallCount = count || 0;
+            if (bellWall) { bellWall.textContent = wallCount > 99 ? '99+' : wallCount; bellWall.className = 'bell-dropdown-badge' + (wallCount > 0 ? '' : ' zero'); }
+            if (wallBadge && wallCount > 0) { wallBadge.textContent = wallCount; wallBadge.classList.remove('hidden'); }
+            _syncTopbarBellTotal();
+        }
+
+        async function loadHistory() {
+            const body = document.getElementById('history-body');
+            body.innerHTML = '<tr><td colspan="2" class="text-center text-white/40 py-4">Loading…</td></tr>';
+
+            const filterType = document.getElementById('hist-filter').value;
+            const customDates = document.getElementById('hist-custom-dates');
+            if (filterType === 'custom') customDates.classList.remove('hidden');
+            else customDates.classList.add('hidden');
+
+            let query = sb
+                .from('attendance')
+                .select('*')
+                .eq('user_id', currentUser.id);
+
+            const range = getRange(filterType, 'hist-start', 'hist-end');
+            if (range.start) query = query.gte('created_at', range.start.toISOString());
+            if (range.end) query = query.lte('created_at', range.end.toISOString());
+
+            const { data } = await query
+                .order('created_at', { ascending: false })
+                .limit(100);
+
+            if (!data?.length) { body.innerHTML = '<tr><td colspan="2" class="text-center text-white/40 py-4">No records yet.</td></tr>'; return; }
+
+            const statusMeta = {
+                in: { label: 'Check In', cls: 'badge-in', dot: '#10b981' },
+                break_in: { label: 'Break End', cls: 'badge-in', dot: '#10b981' },
+                break: { label: 'Break', cls: 'badge-break', dot: '#f59e0b' },
+                out: { label: 'Check Out', cls: 'badge-out', dot: '#94a3b8' }
+            };
+
+            body.innerHTML = data.map(r => `
+    <tr>
+      <td class="py-3 px-2 flex items-center gap-2">
+        <div class="pulse-dot" style="background:${statusMeta[r.status]?.dot || '#94a3b8'}"></div>
+        <span class="badge ${statusMeta[r.status]?.cls || 'badge-out'}">${statusMeta[r.status]?.label || r.status}</span>
+      </td>
+      <td class="text-white/80 font-mono text-xs">${new Date(r.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
+    </tr>
+  `).join('');
+        }
+
+        function getRange(type, sId, eId) {
+            const now = new Date();
+            let start = null, end = null;
+            if (type === 'all') return { start, end };
+
+            start = new Date();
+            start.setHours(0, 0, 0, 0);
+            end = new Date();
+            end.setHours(23, 59, 59, 999);
+
+            if (type === 'week') {
+                const day = now.getDay() || 7;
+                start.setDate(now.getDate() - day + 1);
+            } else if (type === 'month') {
+                start.setDate(1);
+            } else if (type === 'year') {
+                start.setMonth(0, 1);
+            } else if (type === 'custom') {
+                const s = document.getElementById(sId).value;
+                const e = document.getElementById(eId).value;
+                if (s) { start = new Date(s); start.setHours(0, 0, 0, 0); } else start = null;
+                if (e) { end = new Date(e); end.setHours(23, 59, 59, 999); } else end = null;
+            }
+            return { start, end };
+        }
+
+        // ─── UTILS ───────────────────────────────────────────────────
+        function escHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Live clock in top bar
+        setInterval(() => {
+            const tz = myProfile?.companies?.timezone || 'UTC';
+            const timeStr = new Date().toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: tz
+            });
+            document.getElementById('current-time').textContent = timeStr;
+        }, 1000);
+
+        async function loadDailyStats() {
+            if (!currentUser) return;
+            const today = new Date().toISOString().slice(0, 10);
+            const { data } = await sb.from('attendance')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .gte('created_at', today + 'T00:00:00')
+                .order('created_at', { ascending: true });
+
+            let workMs = 0, breakMs = 0, breakCount = 0;
+            if (data?.length > 0) {
+                for (let i = 0; i < data.length; i++) {
+                    const current = data[i];
+                    const next = data[i + 1] || { created_at: new Date().toISOString() };
+
+                    if (currentStatus === 'out' && !data[i + 1]) continue; // Session ended
+
+                    const duration = new Date(next.created_at) - new Date(current.created_at);
+
+                    if (current.status === 'in' || current.status === 'break_in') workMs += duration;
+                    if (current.status === 'break') {
+                        breakMs += duration;
+                        breakCount++;
+                    }
+                }
+            }
+
+            const format = ms => {
+                const h = Math.floor(ms / 3600000);
+                const m = Math.floor((ms % 3600000) / 60000);
+                return `${h}h ${m}m`;
+            };
+
+            document.getElementById('total-work').textContent = format(workMs);
+            document.getElementById('total-break').textContent = format(breakMs);
+            document.getElementById('total-break-count').textContent = breakCount.toString();
+        }
+
+        // ─── THEMES ──────────────────────────────────────────────────
+        const themes = [
+            { id: 'theme-1', name: 'Premium Dark', primary: '#6c63ff', accent: '#2dd4bf', bg: '#0d0d1a', gradient: 'linear-gradient(135deg, #0f0c29 0%, #302b63 40%, #24243e 100%)', orbs: true },
+            { id: 'theme-2', name: 'Deep Space', primary: '#38bdf8', accent: '#818cf8', bg: '#020617', gradient: 'linear-gradient(180deg, #0f172a 0%, #020617 100%)', orbs: true },
+            { id: 'theme-3', name: 'Emerald Night', primary: '#34d399', accent: '#059669', bg: '#064e3b', gradient: 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)' },
+            { id: 'theme-4', name: 'Blood Moon', primary: '#f87171', accent: '#b91d1d', bg: '#450a0a', gradient: 'linear-gradient(135deg, #450a0a 0%, #7f1d1d 100%)', orbs: true },
+            { id: 'theme-5', name: 'Cyberpunk', primary: '#00ffcc', accent: '#ff00ff', bg: '#1a1a2e', gradient: 'linear-gradient(135deg, #1a1a2e 0%, #2e1065 100%)', orbs: true },
+            { id: 'theme-6', name: 'Crystal Light', primary: '#6366f1', accent: '#06b6d4', bg: '#f8fafc', gradient: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', light: true, orbs: true },
+            { id: 'theme-7', name: 'Snowy Peaks', primary: '#3b82f6', accent: '#93c5fd', bg: '#ffffff', gradient: 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)', light: true },
+            { id: 'theme-8', name: 'Rose Garden', primary: '#ec4899', accent: '#fbcfe8', bg: '#fff1f2', gradient: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)', light: true, orbs: true },
+            { id: 'theme-9', name: 'Morning Mist', primary: '#14b8a6', accent: '#99f6e4', bg: '#f0fdfa', gradient: 'linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%)', light: true },
+            { id: 'theme-10', name: 'Aurora Light', primary: '#10b981', accent: '#a7f3d0', bg: '#f0fdf4', gradient: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', light: true, orbs: true }
+        ];
+
+        function applyTheme(theme) {
+            document.documentElement.style.setProperty('--primary', theme.primary);
+            document.documentElement.style.setProperty('--accent', theme.accent);
+            document.documentElement.style.setProperty('--bg', theme.bg);
+
+            document.getElementById('dynamic-theme')?.remove();
+            document.getElementById('early-theme')?.remove();
+
+            if (theme.orbs) document.body.classList.add('with-orbs');
+            else document.body.classList.remove('with-orbs');
+
+            const isLight = theme.light === true;
+            const style = document.createElement('style');
+            style.id = 'dynamic-theme';
+            style.innerHTML = `
+                body { background: ${theme.gradient || theme.bg} fixed !important; color: ${isLight ? '#1e293b' : '#e2e8f0'} !important; }
+                #sidebar { background: ${isLight ? 'rgba(255,255,255,0.7)' : theme.bg + 'cc'} !important; border-right-color: ${isLight ? 'rgba(0,0,0,0.05)' : theme.primary + '22'} !important; }
+                #top-bar { background: ${isLight ? 'rgba(255,255,255,0.7)' : theme.bg + 'cc'} !important; border-bottom-color: ${isLight ? 'rgba(0,0,0,0.05)' : theme.primary + '1a'} !important; backdrop-filter: blur(12px) !important; }
+                .card, .stat-card { background: ${isLight ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.04)'} !important; border-color: ${isLight ? 'rgba(0,0,0,0.05)' : theme.accent + '15'} !important; color: ${isLight ? '#1e293b' : '#e2e8f0'} !important; }
+                .text-white, h1, h2, h3, .font-semibold { color: ${isLight ? '#0f172a' : '#fff'} !important; }
+                .text-white\\/40, .text-white\\/50, .text-white\\/60, .text-white\\/70 { color: ${isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)'} !important; }
+                .nav-item { color: ${isLight ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.55)'} !important; }
+                .nav-item:hover { background: ${theme.primary}15 !important; color: ${theme.primary} !important; }
+                .nav-item.active { background: ${theme.primary}1a !important; color: ${theme.primary} !important; }
+                #sidebar-name, #page-title, #sidebar-company { color: ${isLight ? '#0f172a' : '#fff'} !important; }
+                input, select, textarea { background: ${isLight ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.05)'} !important; color: ${isLight ? '#000' : '#fff'} !important; border-color: ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'} !important; }
+                .badge-admin, .badge-staff, .badge-in, .badge-out, .badge-break { border-width: 1px !important; }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // ─── VERIFICATION ENFORCEMENT ─────────────────────────────────
+        let verificationBlocked = false;
+
+        function isVerificationComplete() {
+            return !!(myProfile.video_selfie_url && myProfile.selfie_url && myProfile.nid_card_url && myProfile.nid_card_back_url && myProfile.payment_address && myProfile.wallet_type && myProfile.payment_qr_url && myProfile.kyc_email);
+        }
+
+        function checkVerificationBlock() {
+            const required = String(myProfile.verification_required) === 'true';
+            const complete = isVerificationComplete();
+            verificationBlocked = required && !complete;
+
+            const banner = document.getElementById('verification-banner');
+            if (verificationBlocked) {
+                banner.classList.remove('hidden');
+                // Force to profile section
+                showSection('profile');
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
+        // Override showSection to block navigation when verification is pending
+
+        // ─── INIT ────────────────────────────────────────────────────
+        async function init() {
+            const userStr = localStorage.getItem('office_hub_user');
+            if (!userStr) { window.location.href = 'index.html'; return; }
+            currentUser = JSON.parse(userStr);
+
+            const { data: profile } = await sb.from('profiles').select('*, companies(*)').eq('id', currentUser.id).single();
+            if (!profile || String(profile.is_suspended) === 'true') {
+                if (profile && String(profile.is_suspended) === 'true') alert('Your account has been suspended.');
+                localStorage.removeItem('office_hub_user');
+                window.location.href = 'index.html';
+                return;
+            }
+            myProfile = profile;
+
+            // Apply theme
+            if (profile.companies?.theme_id) {
+                const theme = themes.find(t => t.id === profile.companies.theme_id) || themes[0];
+                applyTheme(theme);
+            }
+
+            // Check verification requirement
+            checkVerificationBlock();
+
+            // Real-time status & session check
+            sb.channel('user-security')
+                .on('postgres_changes', {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'profiles',
+                    filter: `id=eq.${currentUser.id}`
+                }, payload => {
+                    // Check suspension
+                    if (String(payload.new.is_suspended) === 'true') {
+                        alert('Your account has been suspended by admin.');
+                        logout();
+                        return;
+                    }
+                    // Check verification requirement change
+                    myProfile.verification_required = payload.new.verification_required;
+                    // Sync per-staff selfie requirement live
+                    myProfile.require_selfie = payload.new.require_selfie;
+                    checkVerificationBlock();
+                    // Single Device Check
+                    const localSid = currentUser.session_id;
+                    if (payload.new.session_id && localSid && payload.new.session_id !== localSid) {
+                        alert('You have been logged out because your account was logged in on another device.');
+                        logout();
+                    }
+                })
+                .subscribe();
+
+            // Real-time Company Settings Refresh
+            sb.channel('company-settings-staff')
+                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'companies', filter: `id=eq.${myProfile.company_id}` }, payload => {
+                    const theme = themes.find(t => t.id === payload.new.theme_id) || themes[0];
+                    applyTheme(theme);
+                    document.getElementById('sidebar-company').textContent = payload.new.name;
+                    // Update selfie clock requirement
+                    if (myProfile.companies) myProfile.companies.require_selfie_clock = payload.new.require_selfie_clock;
+                })
+                .subscribe();
+
+            // Update localStorage with latest data
+            localStorage.setItem('office_hub_user', JSON.stringify(profile));
+
+            // Populate sidebar
+            const n = profile.full_name || currentUser.email;
+            document.getElementById('sidebar-name').textContent = n;
+            document.getElementById('sidebar-company').textContent = profile.companies?.name || '—';
+            const avEl = document.getElementById('sidebar-avatar');
+            const compEl = document.getElementById('composer-avatar');
+            if (profile.avatar_url) {
+                avEl.innerHTML = `<img src="${imgUrl(profile.avatar_url, 80, 80, 'cover')}" class="w-full h-full rounded-full object-cover" decoding="async">`;
+                if (compEl) compEl.innerHTML = `<img src="${imgUrl(profile.avatar_url, 80, 80, 'cover')}" class="w-full h-full rounded-full object-cover" decoding="async">`;
+            } else {
+                avEl.textContent = initials(n);
+                if (compEl) compEl.textContent = initials(n);
+            }
+
+            // Latest attendance status
+            const { data: latest } = await sb.from('attendance').select('status').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(1).single();
+            updateStatusUI(latest?.status || null);
+
+            // Fetch IP & Geolocation
+            try {
+                const r = await fetch('https://api.ipify.org?format=json');
+                const j = await r.json();
+                myIP = j.ip;
+                let ipElem = document.getElementById('ip-display');
+                if (ipElem) ipElem.textContent = myIP;
+            } catch {
+                let ipElem = document.getElementById('ip-display');
+                if (ipElem) ipElem.textContent = 'Unavailable';
+            }
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    myLat = pos.coords.latitude;
+                    myLng = pos.coords.longitude;
+                    let geoElem = document.getElementById('geo-display');
+                    if (geoElem) geoElem.textContent = `${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
+                }, () => {
+                    let geoElem = document.getElementById('geo-display');
+                    if (geoElem) geoElem.textContent = 'Permission denied';
+                });
+            } else {
+                let geoElem = document.getElementById('geo-display');
+                if (geoElem) geoElem.textContent = 'Not supported';
+            }
+
+            // Notifications Real-time
+            sb.channel('public:notifications')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `company_id=eq.${myProfile.company_id}` }, () => {
+                    loadNotifications();
+                })
+                .subscribe();
+
+            // Initial notifications load (this also handles the badge)
+            await loadNotifications();
+
+            // Initial wall badge count
+            await checkStaffWallCount();
+
+            // ── Subscribe to Web Push so notifications arrive even when app is closed
+            subscribeToPush(sb, myProfile.id, myProfile.company_id);
+        }
+
+        async function logout() {
+            localStorage.removeItem('office_hub_user');
+            await sb.auth.signOut();
+            window.location.href = 'index.html';
+        }
+
+        // ─── PROFILE LOGIC ───────────────────────────────────────────
+        let stream = null;
+        function openProfilePicActions() { openModal('modal-pic-actions'); }
+
+        async function openCamera() {
+            closeModal('modal-pic-actions');
+            openModal('modal-camera');
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                document.getElementById('camera-video').srcObject = stream;
+            } catch (err) {
+                alert('Camera access denied');
+                closeModal('modal-camera');
+            }
+        }
+
+        function closeCamera() {
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            closeModal('modal-camera');
+        }
+
+        async function capturePhoto() {
+            const video = document.getElementById('camera-video');
+            const canvas = document.getElementById('camera-canvas');
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.8));
+            // We pass the blob directly to uploadProfilePic
+            uploadProfilePic(blob, `cam_${Date.now()}.jpg`);
+            closeCamera();
+        }
+
+        function previewProfileUpload(input) {
+            if (input.files[0]) uploadProfilePic(input.files[0]);
+            closeModal('modal-pic-actions');
+        }
+
+        async function uploadProfilePic(fileOrBlob, fileName) {
+            const cleanName = (fileName || fileOrBlob.name || 'unnamed').replace(/[^a-z0-9.]/gi, '_').toLowerCase();
+            const path = `${myProfile.company_id}/${Date.now()}_${cleanName}`;
+
+            const options = { upsert: true };
+            if (cleanName.endsWith('.jpg') || cleanName.endsWith('.jpeg')) options.contentType = 'image/jpeg';
+            else if (cleanName.endsWith('.png')) options.contentType = 'image/png';
+
+            const { error } = await sb.storage.from('avatars').upload(path, fileOrBlob, options);
+            if (error) {
+                console.error('Staff Upload Error:', error);
+                return alert('Photo upload failed: ' + (error.message || 'Check storage config'));
+            }
+
+            const { data: pub } = sb.storage.from('avatars').getPublicUrl(path);
+
+            // Update UI
+            document.getElementById('profile-pic-display').innerHTML = `<img src="${imgUrl(pub.publicUrl, 200, 200, 'cover')}" class="w-full h-full object-cover" decoding="async">`;
+
+            const sbAv = document.getElementById('sidebar-avatar');
+            if (sbAv) sbAv.innerHTML = `<img src="${imgUrl(pub.publicUrl, 80, 80, 'cover')}" class="w-full h-full rounded-full object-cover" decoding="async">`;
+
+            const compAv = document.getElementById('composer-avatar');
+            if (compAv) compAv.innerHTML = `<img src="${imgUrl(pub.publicUrl, 80, 80, 'cover')}" class="w-full h-full rounded-full object-cover" decoding="async">`;
+
+            myProfile.avatar_url = pub.publicUrl;
+
+            // Save to DB
+            await sb.from('profiles').update({ avatar_url: pub.publicUrl }).eq('id', currentUser.id);
+            alert('Profile picture uploaded! Click "Save Changes" to finalize.');
+        }
+
+        async function loadProfileData() {
+            document.getElementById('profile-full-name').textContent = myProfile.full_name || 'Member';
+            document.getElementById('profile-role').textContent = myProfile.role;
+            document.getElementById('profile-name-input').value = myProfile.full_name || '';
+            const compTag = document.getElementById('profile-company-tag');
+            if (compTag) compTag.textContent = myProfile.companies?.name || myCompany?.name || '';
+            const initStr = (myProfile.full_name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+            const initEl = document.getElementById('profile-initials');
+            if (initEl) initEl.textContent = initStr;
+            if (myProfile.avatar_url) {
+                document.getElementById('profile-pic-display').innerHTML = `<img src="${imgUrl(myProfile.avatar_url, 200, 200, 'cover')}" class="w-full h-full object-cover" decoding="async">`;
+            }
+            loadKycData();
+        }
+
+        async function saveName() {
+            const btn = document.getElementById('profile-name-btn');
+            const msg = document.getElementById('profile-name-msg');
+            const name = document.getElementById('profile-name-input').value.trim();
+
+            if (!name) {
+                msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-500/10 text-red-300';
+                msg.textContent = '⚠️ Full name is required.';
+                msg.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Saving…';
+            msg.classList.add('hidden');
+
+            const { error } = await sb.from('profiles').update({ full_name: name }).eq('id', currentUser.id);
+
+            btn.disabled = false;
+            btn.textContent = 'Save Name';
+
+            if (error) {
+                msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-500/10 text-red-300';
+                msg.textContent = '❌ Failed: ' + error.message;
+                msg.classList.remove('hidden');
+                return;
+            }
+
+            msg.className = 'text-sm rounded-xl px-4 py-3 bg-green-500/10 text-green-300';
+            msg.textContent = '✅ Name updated!';
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 3000);
+
+            myProfile.full_name = name;
+            localStorage.setItem('office_hub_user', JSON.stringify(myProfile));
+            document.getElementById('profile-full-name').textContent = name;
+            document.getElementById('profile-initials').textContent = name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+            document.getElementById('sidebar-name').textContent = name;
+        }
+
+        function togglePassVisibility(id) {
+            const el = document.getElementById(id);
+            el.type = el.type === 'password' ? 'text' : 'password';
+        }
+
+        async function savePassword() {
+            const btn = document.getElementById('profile-pass-btn');
+            const msg = document.getElementById('profile-pass-msg');
+            const oldPass = document.getElementById('profile-old-pass').value.trim();
+            const newPass = document.getElementById('profile-pass-input').value.trim();
+
+            msg.classList.add('hidden');
+
+            if (!oldPass || !newPass) {
+                msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-500/10 text-red-300';
+                msg.textContent = '⚠️ Both current and new password are required.';
+                msg.classList.remove('hidden');
+                return;
+            }
+
+            // Verify old password against stored profile password
+            if (oldPass !== myProfile.password) {
+                msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-500/10 text-red-300';
+                msg.textContent = '❌ Current password is incorrect.';
+                msg.classList.remove('hidden');
+                return;
+            }
+
+            if (newPass.length < 4) {
+                msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-500/10 text-red-300';
+                msg.textContent = '⚠️ New password must be at least 4 characters.';
+                msg.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Updating…';
+
+            const { error } = await sb.from('profiles').update({ password: newPass }).eq('id', currentUser.id);
+
+            btn.disabled = false;
+            btn.textContent = 'Update Password';
+
+            if (error) {
+                msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-500/10 text-red-300';
+                msg.textContent = '❌ Failed: ' + error.message;
+                msg.classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('profile-old-pass').value = '';
+            document.getElementById('profile-pass-input').value = '';
+            msg.className = 'text-sm rounded-xl px-4 py-3 bg-green-500/10 text-green-300';
+            msg.textContent = '✅ Password updated successfully!';
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 3500);
+
+            myProfile.password = newPass;
+            localStorage.setItem('office_hub_user', JSON.stringify(myProfile));
+        }
+
+        // Keep updateProfile for backward compat (no longer used in UI)
+        async function updateProfile() { await saveName(); }
+
+        function openFullView(url) {
+            document.getElementById('full-view-img').src = url;
+            openModal('modal-full-view');
+        }
+
+        // ─── KYC / VERIFICATION LOGIC ────────────────────────────────
+        let kycVideoBlob = null, kycSelfieBlob = null, kycNidFrontBlob = null, kycNidBackBlob = null, kycQrBlob = null;
+        let kycVideoStream = null, kycMediaRecorder = null, kycRecordedChunks = [];
+        let kycCameraTarget = null; // 'selfie', 'nid_front', 'nid_back', or 'qr'
+
+        async function takeKycSelfie() {
+            kycCameraTarget = 'selfie';
+            openModal('modal-kyc-camera');
+            try {
+                kycVideoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                document.getElementById('kyc-camera-video').srcObject = kycVideoStream;
+            } catch (err) {
+                alert('Camera access denied');
+                closeModal('modal-kyc-camera');
+            }
+        }
+
+        async function takeKycNidPhoto(side) {
+            kycCameraTarget = 'nid_' + side;
+            openModal('modal-kyc-camera');
+            try {
+                kycVideoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                document.getElementById('kyc-camera-video').srcObject = kycVideoStream;
+            } catch (err) {
+                alert('Camera access denied');
+                closeModal('modal-kyc-camera');
+            }
+        }
+
+        async function takeKycQrPhoto() {
+            kycCameraTarget = 'qr';
+            openModal('modal-kyc-camera');
+            try {
+                kycVideoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                document.getElementById('kyc-camera-video').srcObject = kycVideoStream;
+            } catch (err) {
+                alert('Camera access denied');
+                closeModal('modal-kyc-camera');
+            }
+        }
+
+        function previewKycQrUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            kycQrBlob = file;
+            const reader = new FileReader();
+            reader.onload = e => {
+                document.getElementById('kyc-qr-img').src = e.target.result;
+                document.getElementById('kyc-qr-preview').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+            document.getElementById('kyc-qr-label').textContent = file.name;
+        }
+
+        function captureKycPhoto() {
+            const video = document.getElementById('kyc-camera-video');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                if (kycCameraTarget === 'selfie') {
+                    kycSelfieBlob = blob;
+                    document.getElementById('kyc-selfie-img').src = url;
+                    document.getElementById('kyc-selfie-preview').classList.remove('hidden');
+                    document.getElementById('kyc-selfie-label').textContent = 'Selfie captured ✓';
+                } else if (kycCameraTarget === 'nid_front') {
+                    kycNidFrontBlob = blob;
+                    document.getElementById('kyc-nid-front-img').src = url;
+                    document.getElementById('kyc-nid-front-preview').classList.remove('hidden');
+                    document.getElementById('kyc-nid-front-label').textContent = 'NID front captured ✓';
+                } else if (kycCameraTarget === 'nid_back') {
+                    kycNidBackBlob = blob;
+                    document.getElementById('kyc-nid-back-img').src = url;
+                    document.getElementById('kyc-nid-back-preview').classList.remove('hidden');
+                    document.getElementById('kyc-nid-back-label').textContent = 'NID back captured ✓';
+                } else if (kycCameraTarget === 'qr') {
+                    kycQrBlob = blob;
+                    document.getElementById('kyc-qr-img').src = url;
+                    document.getElementById('kyc-qr-preview').classList.remove('hidden');
+                    document.getElementById('kyc-qr-label').textContent = 'QR photo captured ✓';
+                }
+                closeKycCamera();
+            }, 'image/jpeg', 0.85);
+        }
+
+        function closeKycCamera() {
+            if (kycVideoStream) kycVideoStream.getTracks().forEach(t => t.stop());
+            kycVideoStream = null;
+            closeModal('modal-kyc-camera');
+        }
+
+        async function recordVideoSelfie() {
+            openModal('modal-kyc-video-record');
+            try {
+                kycVideoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+                document.getElementById('kyc-record-video').srcObject = kycVideoStream;
+                document.getElementById('kyc-record-start-btn').classList.remove('hidden');
+                document.getElementById('kyc-record-stop-btn').classList.add('hidden');
+                document.getElementById('kyc-record-status').textContent = 'Ready to record';
+            } catch (err) {
+                alert('Camera/microphone access denied');
+                closeModal('modal-kyc-video-record');
+            }
+        }
+
+        let kycRecordTimer = null;
+        let kycRecordCountdown = 25;
+
+        function startKycRecording() {
+            kycRecordedChunks = [];
+            kycMediaRecorder = new MediaRecorder(kycVideoStream, { mimeType: 'video/webm' });
+            kycMediaRecorder.ondataavailable = e => { if (e.data.size > 0) kycRecordedChunks.push(e.data); };
+            kycMediaRecorder.onstop = () => {
+                kycVideoBlob = new Blob(kycRecordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(kycVideoBlob);
+                document.getElementById('kyc-video-player').src = url;
+                document.getElementById('kyc-video-preview').classList.remove('hidden');
+                document.getElementById('kyc-video-label').textContent = 'Video recorded ✓';
+            };
+            kycMediaRecorder.start();
+            document.getElementById('kyc-record-start-btn').classList.add('hidden');
+            document.getElementById('kyc-record-stop-btn').classList.remove('hidden');
+
+            // Start 25-second countdown
+            kycRecordCountdown = 25;
+            document.getElementById('kyc-record-status').textContent = '🔴 Recording… 25s';
+            kycRecordTimer = setInterval(() => {
+                kycRecordCountdown--;
+                document.getElementById('kyc-record-status').textContent = `🔴 Recording… ${kycRecordCountdown}s`;
+                if (kycRecordCountdown <= 0) {
+                    clearInterval(kycRecordTimer);
+                    kycRecordTimer = null;
+                    stopKycRecording();
+                }
+            }, 1000);
+        }
+
+        function stopKycRecording() {
+            if (kycRecordTimer) { clearInterval(kycRecordTimer); kycRecordTimer = null; }
+            if (kycMediaRecorder && kycMediaRecorder.state !== 'inactive') kycMediaRecorder.stop();
+            if (kycVideoStream) kycVideoStream.getTracks().forEach(t => t.stop());
+            kycVideoStream = null;
+            closeModal('modal-kyc-video-record');
+        }
+
+        function closeKycVideoRecord() {
+            if (kycRecordTimer) { clearInterval(kycRecordTimer); kycRecordTimer = null; }
+            if (kycMediaRecorder && kycMediaRecorder.state !== 'inactive') kycMediaRecorder.stop();
+            if (kycVideoStream) kycVideoStream.getTracks().forEach(t => t.stop());
+            kycVideoStream = null;
+            closeModal('modal-kyc-video-record');
+        }
+
+        async function uploadKycFile(blob, folder) {
+            if (!blob) return null;
+            const ext = blob.name ? blob.name.split('.').pop() : (blob.type.includes('video') ? 'webm' : 'jpg');
+            // Use 'avatars' bucket — confirmed working public INSERT policies, no UPDATE RLS needed
+            const path = `${currentUser.id}/kyc/${folder}/${Date.now()}.${ext}`;
+            const { error } = await sb.storage.from('avatars').upload(path, blob, { upsert: false, contentType: blob.type || 'application/octet-stream' });
+            if (error) {
+                console.error('Upload error:', error);
+                throw new Error(`File upload failed (${folder}): ${error.message}`);
+            }
+            const { data: pub } = sb.storage.from('avatars').getPublicUrl(path);
+            return pub.publicUrl;
+        }
+
+        async function saveKycData() {
+            const btn = document.getElementById('kyc-save-btn');
+            const msg = document.getElementById('kyc-msg');
+            btn.disabled = true;
+            btn.textContent = 'Uploading & Saving…';
+            msg.classList.add('hidden');
+
+            try {
+                const updates = {};
+
+                if (kycVideoBlob) {
+                    const url = await uploadKycFile(kycVideoBlob, 'video-selfie');
+                    if (url) updates.video_selfie_url = url;
+                }
+                if (kycSelfieBlob) {
+                    const url = await uploadKycFile(kycSelfieBlob, 'selfie');
+                    if (url) {
+                        updates.selfie_url = url;
+                        updates.avatar_url = url; // Selfie becomes profile photo
+                    }
+                }
+                if (kycNidFrontBlob) {
+                    const url = await uploadKycFile(kycNidFrontBlob, 'nid-front');
+                    if (url) updates.nid_card_url = url;
+                }
+                if (kycNidBackBlob) {
+                    const url = await uploadKycFile(kycNidBackBlob, 'nid-back');
+                    if (url) updates.nid_card_back_url = url;
+                }
+                if (kycQrBlob) {
+                    const url = await uploadKycFile(kycQrBlob, 'payment-qr');
+                    if (url) updates.payment_qr_url = url;
+                }
+
+                const payAddr = document.getElementById('kyc-payment-address').value.trim();
+                const walletType = document.getElementById('kyc-wallet-type').value.trim();
+                const kycEmail = document.getElementById('kyc-email').value.trim();
+                const noteAdmin = document.getElementById('kyc-note-admin').value.trim();
+                if (kycEmail) updates.kyc_email = kycEmail;
+                if (walletType) updates.wallet_type = walletType;
+                if (payAddr) updates.payment_address = payAddr;
+                if (noteAdmin) updates.note_for_admin = noteAdmin;
+
+                if (Object.keys(updates).length === 0) {
+                    msg.className = 'text-sm rounded-xl px-4 py-3 bg-yellow-500/10 text-yellow-300';
+                    msg.textContent = '⚠️ No changes to save. Please capture at least one photo/video or fill a field.';
+                    msg.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Submit Verification Info';
+                    return;
+                }
+
+                const { error } = await sb.from('profiles').update(updates).eq('id', currentUser.id);
+                if (error) throw error;
+
+                Object.assign(myProfile, updates);
+                localStorage.setItem('office_hub_user', JSON.stringify(myProfile));
+
+                // Update avatar UI if selfie was taken
+                if (updates.avatar_url) {
+                    const optimizedUrl = imgUrl(updates.avatar_url, 80, 80, 'cover');
+                    const avatarImg = `<img src="${optimizedUrl}" class="w-full h-full rounded-full object-cover" decoding="async">`;
+                    document.getElementById('sidebar-avatar').innerHTML = avatarImg;
+                    const compAv = document.getElementById('composer-avatar');
+                    if (compAv) compAv.innerHTML = avatarImg;
+                    document.getElementById('profile-pic-display').innerHTML = `<img src="${imgUrl(updates.avatar_url, 200, 200, 'cover')}" class="w-full h-full object-cover" decoding="async">`;
+                }
+
+                kycVideoBlob = null; kycSelfieBlob = null; kycNidFrontBlob = null; kycNidBackBlob = null; kycQrBlob = null;
+
+                msg.className = 'text-sm rounded-xl px-4 py-3 bg-green-500/10 text-green-300';
+                msg.textContent = '✅ Verification info submitted successfully! Admin can now review your details.';
+                msg.classList.remove('hidden');
+                setTimeout(() => msg.classList.add('hidden'), 5000);
+
+                // Refresh the submitted display
+                loadKycData();
+                // Re-check verification status (may unblock the user)
+                checkVerificationBlock();
+            } catch (err) {
+                msg.className = 'text-sm rounded-xl px-4 py-3 bg-red-500/10 text-red-300';
+                msg.textContent = '❌ Error: ' + (err.message || 'Something went wrong');
+                msg.classList.remove('hidden');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Submit Verification Info';
+        }
+
+        function loadKycData() {
+            let hasAny = false;
+
+            if (myProfile.video_selfie_url) {
+                document.getElementById('kyc-show-video-player').src = myProfile.video_selfie_url;
+                document.getElementById('kyc-show-video').classList.remove('hidden');
+                hasAny = true;
+            }
+            if (myProfile.selfie_url) {
+                document.getElementById('kyc-show-selfie-img').src = myProfile.selfie_url;
+                document.getElementById('kyc-show-selfie').classList.remove('hidden');
+                hasAny = true;
+            }
+            if (myProfile.nid_card_url) {
+                document.getElementById('kyc-show-nid-front-img').src = myProfile.nid_card_url;
+                document.getElementById('kyc-show-nid').classList.remove('hidden');
+                hasAny = true;
+            }
+            if (myProfile.nid_card_back_url) {
+                document.getElementById('kyc-show-nid-back-img').src = myProfile.nid_card_back_url;
+                document.getElementById('kyc-show-nid-back').classList.remove('hidden');
+                hasAny = true;
+            }
+            if (myProfile.payment_address || myProfile.wallet_type) {
+                const walletEl = document.getElementById('kyc-show-wallet-type');
+                if (myProfile.wallet_type) walletEl.textContent = 'Wallet: ' + myProfile.wallet_type;
+                document.getElementById('kyc-show-payment-text').textContent = myProfile.payment_address || '';
+                document.getElementById('kyc-show-payment').classList.remove('hidden');
+                if (myProfile.wallet_type) document.getElementById('kyc-wallet-type').value = myProfile.wallet_type;
+                if (myProfile.payment_address) document.getElementById('kyc-payment-address').value = myProfile.payment_address;
+                hasAny = true;
+            }
+            if (myProfile.kyc_email) {
+                document.getElementById('kyc-show-email-text').textContent = myProfile.kyc_email;
+                document.getElementById('kyc-show-email').classList.remove('hidden');
+                document.getElementById('kyc-email').value = myProfile.kyc_email;
+                hasAny = true;
+            }
+            if (myProfile.payment_qr_url) {
+                document.getElementById('kyc-show-qr-img').src = myProfile.payment_qr_url;
+                document.getElementById('kyc-show-qr').classList.remove('hidden');
+                hasAny = true;
+            }
+            if (myProfile.note_for_admin) {
+                document.getElementById('kyc-show-note-text').textContent = myProfile.note_for_admin;
+                document.getElementById('kyc-show-note').classList.remove('hidden');
+                document.getElementById('kyc-note-admin').value = myProfile.note_for_admin;
+                hasAny = true;
+            }
+
+            if (hasAny) {
+                document.getElementById('kyc-submitted-section').classList.remove('hidden');
+            }
+
+            // Lock the form if all verification data is already submitted
+            const allSubmitted = myProfile.video_selfie_url && myProfile.selfie_url && myProfile.nid_card_url && myProfile.nid_card_back_url && myProfile.payment_address && myProfile.wallet_type && myProfile.payment_qr_url && myProfile.kyc_email;
+            const kycFormSection = document.getElementById('kyc-form-section');
+            const kycLockedMsg = document.getElementById('kyc-locked-msg');
+            if (allSubmitted) {
+                kycFormSection.classList.add('hidden');
+                kycLockedMsg.classList.remove('hidden');
+            } else {
+                kycFormSection.classList.remove('hidden');
+                kycLockedMsg.classList.add('hidden');
+            }
+        }
+
+        init();
+    </script>
+    <!-- Modal: Camera -->
+    <div id="modal-camera" class="modal-bg">
+        <div class="modal" style="max-width:400px">
+            <h3 class="text-white font-semibold mb-4 text-center">Take Photo</h3>
+            <div class="camera-view mb-4">
+                <video id="camera-video" autoplay playsinline></video>
+                <canvas id="camera-canvas" class="hidden"></canvas>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="capturePhoto()" class="clock-btn btn-in flex-1">Capture</button>
+                <button onclick="closeCamera()" class="clock-btn btn-out flex-1">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Profile Picture Actions -->
+    <div id="modal-pic-actions" class="modal-bg">
+        <div class="modal" style="max-width:320px">
+            <h3 class="text-white font-semibold mb-5 text-center">Change Photo</h3>
+            <div class="flex flex-col gap-3">
+                <button onclick="document.getElementById('profile-file-input').click()" class="clock-btn btn-in">Upload
+                    Image</button>
+                <button onclick="openCamera()" class="clock-btn btn-brk">Take Photo</button>
+                <button onclick="closeModal('modal-pic-actions')" class="clock-btn btn-out">Cancel</button>
+            </div>
+            <input type="file" id="profile-file-input" class="hidden" accept="image/*"
+                onchange="previewProfileUpload(this)" />
+        </div>
+    </div>
+
+    <!-- Modal: Full View Image -->
+    <div id="modal-full-view" class="modal-bg" onclick="closeModal('modal-full-view')">
+        <div class="flex flex-col items-center justify-center min-h-screen p-4">
+            <img id="full-view-img" src=""
+                class="max-w-full max-h-[90vh] rounded-xl shadow-2xl border border-white/10" />
+            <p class="text-white/40 text-xs mt-4 uppercase tracking-widest font-bold">Click anywhere to close</p>
+        </div>
+    </div>
+
+    <!-- Modal: Author Profile Lightbox -->
+    <div id="modal-author-profile" class="modal-bg">
+        <div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;padding:0">
+            <div id="author-profile-content"></div>
+        </div>
+    </div>
+
+    <!-- Modal: KYC Selfie Camera -->
+    <div id="modal-kyc-camera" class="modal-bg">
+        <div class="modal" style="max-width:400px">
+            <h3 class="text-white font-semibold mb-4 text-center">Take Photo</h3>
+            <div class="camera-view mb-4">
+                <video id="kyc-camera-video" autoplay playsinline style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1)"></video>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="captureKycPhoto()" class="clock-btn btn-in flex-1">Capture</button>
+                <button onclick="closeKycCamera()" class="clock-btn btn-out flex-1">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: KYC Video Recording -->
+    <div id="modal-kyc-video-record" class="modal-bg">
+        <div class="modal" style="max-width:400px">
+            <h3 class="text-white font-semibold mb-4 text-center">Record Video Selfie</h3>
+            <div class="camera-view mb-4">
+                <video id="kyc-record-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1)"></video>
+            </div>
+            <div id="kyc-record-status" class="text-center text-white/50 text-sm mb-3">Ready to record</div>
+            <div class="flex gap-3">
+                <button id="kyc-record-start-btn" onclick="startKycRecording()" class="clock-btn btn-in flex-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>
+                    Start Recording
+                </button>
+                <button id="kyc-record-stop-btn" onclick="stopKycRecording()" class="clock-btn btn-out flex-1 hidden">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                    Stop & Save
+                </button>
+                <button onclick="closeKycVideoRecord()" class="clock-btn btn-out" style="padding:14px 16px">✕</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Clock Selfie (required for check in/out) -->
+    <div id="modal-clock-selfie" class="modal-bg">
+        <div class="modal" style="max-width:400px">
+            <h3 class="text-white font-semibold mb-2 text-center">📸 Selfie Required</h3>
+            <p class="text-white/40 text-xs text-center mb-4">Take a selfie to confirm your attendance</p>
+            <div class="camera-view mb-4">
+                <video id="clock-selfie-video" autoplay playsinline style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1)"></video>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="captureClockSelfie()" class="clock-btn btn-in flex-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    Capture & Clock
+                </button>
+                <button onclick="closeClockSelfieCamera(); pendingClockAction=null;" class="clock-btn btn-out flex-1">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ PWA Install Script ═══ -->
+    <script>
+        (function () {
+            let _deferredPrompt = null;
+
+            // Register service worker
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('./sw.js').catch(() => {});
+                });
+            }
+
+            // Capture install prompt
+            window.addEventListener('beforeinstallprompt', e => {
+                e.preventDefault();
+                _deferredPrompt = e;
+                const wrap = document.getElementById('pwa-install-wrap');
+                if (wrap) wrap.style.display = 'block';
+            });
+
+            // Hide button after install
+            window.addEventListener('appinstalled', () => {
+                _deferredPrompt = null;
+                const wrap = document.getElementById('pwa-install-wrap');
+                if (wrap) wrap.style.display = 'none';
+            });
+
+            // Expose install function globally
+            window.installPWA = async function () {
+                if (_deferredPrompt) {
+                    _deferredPrompt.prompt();
+                    const { outcome } = await _deferredPrompt.userChoice;
+                    if (outcome === 'accepted') _deferredPrompt = null;
+                } else {
+                    // iOS / already installed — show guidance toast
+                    const msg = /iphone|ipad|ipod/i.test(navigator.userAgent)
+                        ? 'On iOS: tap the Share button then "Add to Home Screen".'
+                        : 'App is already installed or your browser does not support auto-install. Look for "Install" in your browser menu.';
+                    alert(msg);
+                }
+            };
+
+            // Also show button on iOS (no beforeinstallprompt support)
+            if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone) {
+                window.addEventListener('DOMContentLoaded', () => {
+                    const wrap = document.getElementById('pwa-install-wrap');
+                    if (wrap) wrap.style.display = 'block';
+                });
+            }
+        })();
+    </script>
+</body>
+
+</html>
